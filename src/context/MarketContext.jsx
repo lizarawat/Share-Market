@@ -2,21 +2,19 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 
 const MarketContext = createContext();
 
-// Seed data helper to generate realistic historical OHLC data
-const generateHistoricalData = (startPrice, points = 30, volatility = 0.02) => {
+// Seed fallback data helper in case Yahoo Finance API is unavailable
+const generateHistoricalData = (startPrice, points = 30, volatility = 0.015) => {
   let data = [];
   let currentPrice = startPrice;
   const now = new Date();
   
   for (let i = points; i > 0; i--) {
-    const time = new Date(now.getTime() - i * 15 * 60 * 1000); // 15-minute intervals
-    
-    // Brownian motion simulation
+    const time = new Date(now.getTime() - i * 15 * 60 * 1000);
     const changePercent = (Math.random() - 0.5) * 2 * volatility;
     const open = currentPrice;
     const close = currentPrice * (1 + changePercent);
-    const high = Math.max(open, close) * (1 + Math.random() * 0.01);
-    const low = Math.min(open, close) * (1 - Math.random() * 0.01);
+    const high = Math.max(open, close) * (1 + Math.random() * 0.005);
+    const low = Math.min(open, close) * (1 - Math.random() * 0.005);
     
     data.push({
       time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -24,7 +22,7 @@ const generateHistoricalData = (startPrice, points = 30, volatility = 0.02) => {
       high: parseFloat(high.toFixed(2)),
       low: parseFloat(low.toFixed(2)),
       close: parseFloat(close.toFixed(2)),
-      price: parseFloat(close.toFixed(2)) // Line chart value
+      price: parseFloat(close.toFixed(2))
     });
     
     currentPrice = close;
@@ -32,29 +30,17 @@ const generateHistoricalData = (startPrice, points = 30, volatility = 0.02) => {
   return data;
 };
 
-// Initial stocks configuration
-const INITIAL_STOCKS = [
-  { ticker: 'BTECH', name: 'ByteTech Inc.', price: 150.0, open: 148.5, high: 152.0, low: 147.0, prevClose: 148.5, sector: 'Technology', volatility: 0.025, desc: 'A cutting-edge AI and software services provider dominating cloud infrastructure.' },
-  { ticker: 'SLRFTR', name: 'SolarFuture', price: 78.5, open: 79.0, high: 80.2, low: 77.1, prevClose: 79.0, sector: 'Green Energy', volatility: 0.02, desc: 'Leading manufacturer of high-efficiency solar cells and commercial grid batteries.' },
-  { ticker: 'BIOLFE', name: 'BioLife Pharma', price: 235.2, open: 230.0, high: 238.5, low: 228.0, prevClose: 230.0, sector: 'Healthcare', volatility: 0.035, desc: 'Biotech firm focusing on advanced gene therapy and global vaccine distribution.' },
-  { ticker: 'APEX', name: 'Apex Corp', price: 42.1, open: 42.0, high: 42.5, low: 41.8, prevClose: 42.0, sector: 'Real Estate', volatility: 0.008, desc: 'Commercial real estate trust managing high-value downtown office spaces.' },
-  { ticker: 'ELMTR', name: 'ElectroMotors', price: 92.4, open: 91.0, high: 93.8, low: 90.2, prevClose: 91.0, sector: 'Automotive', volatility: 0.022, desc: 'Next-generation electric vehicle and autonomous driving software developer.' },
-  { ticker: 'FOODS', name: 'DailyFoods', price: 61.3, open: 61.5, high: 61.9, low: 60.8, prevClose: 61.5, sector: 'FMCG', volatility: 0.007, desc: 'Global consumer packaged goods company distributing packaged meals and organic beverages.' },
-  { ticker: 'FNTCH', name: 'FinTech Go', price: 112.8, open: 113.5, high: 114.2, low: 111.9, prevClose: 113.5, sector: 'Finance', volatility: 0.015, desc: 'Mobile banking and digital payment infrastructure platform supporting micro-lending.' }
+// Initial Indian Bluechip stocks watch list seeds
+const INITIAL_INDIAN_STOCKS = [
+  { ticker: 'RELIANCE.NS', name: 'Reliance Industries Ltd', price: 2450.0, open: 2445.0, high: 2465.0, low: 2435.0, prevClose: 2440.0, sector: 'Energy & Retail', volatility: 0.012, desc: 'India\'s largest private conglomerate with presence in refining, retail, and telecommunications (Jio).' },
+  { ticker: 'TCS.NS', name: 'Tata Consultancy Services', price: 3420.0, open: 3410.0, high: 3445.0, low: 3395.0, prevClose: 3405.0, sector: 'Technology', volatility: 0.01, desc: 'A leading global IT services provider and anchor company of the Tata Group.' },
+  { ticker: 'INFY.NS', name: 'Infosys Ltd', price: 1450.0, open: 1452.0, high: 1468.0, low: 1442.0, prevClose: 1455.0, sector: 'Technology', volatility: 0.015, desc: 'Pioneer of the Indian IT service model providing business consulting and technology outsourcing.' },
+  { ticker: 'HDFCBANK.NS', name: 'HDFC Bank Ltd', price: 1620.0, open: 1615.0, high: 1632.0, low: 1608.0, prevClose: 1612.0, sector: 'Finance', volatility: 0.011, desc: 'India\'s largest private sector bank by assets and market capitalization.' },
+  { ticker: 'SBIN.NS', name: 'State Bank of India', price: 585.0, open: 582.0, high: 591.0, low: 579.0, prevClose: 580.0, sector: 'Finance', volatility: 0.016, desc: 'The largest public sector banking and financial services institution in India.' },
+  { ticker: 'BHARTIARTL.NS', name: 'Bharti Airtel Ltd', price: 890.0, open: 885.0, high: 898.0, low: 881.0, prevClose: 884.0, sector: 'Telecom', volatility: 0.013, desc: 'A leading global telecommunications company operating across 18 countries in Asia and Africa.' },
+  { ticker: 'ICICIBANK.NS', name: 'ICICI Bank Ltd', price: 955.0, open: 952.0, high: 963.0, low: 947.0, prevClose: 950.0, sector: 'Finance', volatility: 0.012, desc: 'Leading private sector bank offering diverse financial services through multi-channels.' }
 ];
 
-// Initial News Feed Database
-const NEWS_TEMPLATES = [
-  { headline: "ByteTech announces breakthrough in AI Neural Net compiler", target: "BTECH", impact: 0.15, type: "good", body: "Tech analysts praise ByteTech's new hardware architecture. Shares expected to experience strong buying momentum." },
-  { headline: "SolarFuture wins major government contract for national grid initiative", target: "SLRFTR", impact: 0.12, type: "good", body: "The federal renewable project guarantees steady cashflow for SolarFuture over the next decade." },
-  { headline: "BioLife Pharma receives FDA approval for breakthrough diabetes drug", target: "BIOLFE", impact: 0.18, type: "good", body: "FDA clearance unlocks a $12B global market. BioLife's patent is protected for the next 15 years." },
-  { headline: "Apex Corp reports 98% occupancy rate across commercial properties", target: "APEX", impact: 0.04, type: "good", body: "High corporate demand pushes leasing revenue 5% above analyst expectations." },
-  { headline: "ElectroMotors recalls 50,000 vehicles over minor software glitch", target: "ELMTR", impact: -0.08, type: "bad", body: "A firmware patch is scheduled next week, but recall costs and PR headwind trigger institutional selling." },
-  { headline: "Raw material supply disruptions drag down DailyFoods quarterly margin", target: "FOODS", impact: -0.04, type: "bad", body: "Agricultural inflation and transport logistics bottleneck lead to a minor earnings miss." },
-  { headline: "Regulators investigate FinTech Go for licensing non-compliant partners", target: "FNTCH", impact: -0.10, type: "bad", body: "Compliance investigation creates market uncertainty. Analysts downgrade stock rating to neutral." }
-];
-
-// Initial Lessons Database
 const INITIAL_LESSONS = [
   {
     id: 1,
@@ -67,13 +53,13 @@ const INITIAL_LESSONS = [
     slides: [
       {
         title: "What is a Share?",
-        content: "A share represents fractional ownership of a corporation. When you buy a share of ByteTech, you literally own a micro-percentage of that company. As the company grows in profitability and value, your share value increases.",
+        content: "A share represents fractional ownership of a corporation. When you buy a share of Reliance, you literally own a micro-percentage of that company. As the company grows in profitability and value, your share value increases.",
         concept: "Ownership",
         visualData: { label: "Company Value", segments: [{ name: "Your Share", value: 5, color: "#6366f1" }, { name: "Other Investors", value: 95, color: "#1f2937" }] }
       },
       {
         title: "The Stock Exchange",
-        content: "Stocks are traded on public marketplaces called exchanges (e.g., NYSE, NASDAQ, NSE). Buyers and sellers place orders, and the exchange matches them. Prices change instantly based on supply and demand: more buyers drives prices UP; more sellers drives prices DOWN.",
+        content: "Stocks are traded on public marketplaces called exchanges (in India, NSE and BSE). Buyers and sellers place orders, and the exchange matches them. Prices change instantly based on supply and demand: more buyers drives prices UP; more sellers drives prices DOWN.",
         concept: "Market Matching",
         visualData: null
       },
@@ -262,7 +248,7 @@ const INITIAL_LESSONS = [
       },
       {
         title: "Using Stop-Loss Orders",
-        content: "A stop-loss order instructs your broker to automatically sell a stock if the price falls to a specific level. For example, if you buy a stock at $100 and set a stop-loss at $90, your maximum risk is capped at 10%.",
+        content: "A stop-loss order instructs your broker to automatically sell a stock if the price falls to a specific level. For example, if you buy a stock at ₹100 and set a stop-loss at ₹90, your maximum risk is capped at 10%.",
         concept: "Capital Protection",
         visualData: null
       }
@@ -284,10 +270,9 @@ const INITIAL_LESSONS = [
 ];
 
 export const MarketProvider = ({ children }) => {
-  // Load state from localStorage if it exists, otherwise use defaults
   const loadState = (key, defaultValue) => {
     try {
-      const saved = localStorage.getItem(`market_app_${key}`);
+      const saved = localStorage.getItem(`market_app_in_${key}`);
       return saved ? JSON.parse(saved) : defaultValue;
     } catch (e) {
       return defaultValue;
@@ -296,27 +281,27 @@ export const MarketProvider = ({ children }) => {
 
   const saveState = (key, value) => {
     try {
-      localStorage.setItem(`market_app_${key}`, JSON.stringify(value));
+      localStorage.setItem(`market_app_in_${key}`, JSON.stringify(value));
     } catch (e) {}
   };
 
   // State Declarations
-  const [cash, setCash] = useState(() => loadState('cash', 50000));
+  const [cash, setCash] = useState(() => loadState('cash', 500000)); // Starting cash ₹5,00,000
   const [portfolio, setPortfolio] = useState(() => loadState('portfolio', {}));
   const [stocks, setStocks] = useState(() => {
     const savedStocks = loadState('stocks', null);
     if (savedStocks) return savedStocks;
-    return INITIAL_STOCKS;
+    return INITIAL_INDIAN_STOCKS;
   });
   
   const [priceHistory, setPriceHistory] = useState(() => {
     const savedHistory = loadState('priceHistory', null);
     if (savedHistory) return savedHistory;
     
-    // Generate initial history for all stocks
+    // Seed initial history
     const initialHist = {};
-    INITIAL_STOCKS.forEach(stock => {
-      initialHist[stock.ticker] = generateHistoricalData(stock.price - 10, 30, stock.volatility);
+    INITIAL_INDIAN_STOCKS.forEach(stock => {
+      initialHist[stock.ticker] = generateHistoricalData(stock.price - 40, 30, stock.volatility);
     });
     return initialHist;
   });
@@ -326,31 +311,17 @@ export const MarketProvider = ({ children }) => {
   const [badges, setBadges] = useState(() => loadState('badges', []));
   const [lessons, setLessons] = useState(() => loadState('lessons', INITIAL_LESSONS));
   const [transactionHistory, setTransactionHistory] = useState(() => loadState('transactionHistory', []));
+  const [selectedStockTicker, setSelectedStockTicker] = useState('RELIANCE.NS');
   
-  // Active stock selected in the Simulator
-  const [selectedStockTicker, setSelectedStockTicker] = useState('BTECH');
-  
-  // News system state
-  const [newsFeed, setNewsFeed] = useState(() => loadState('newsFeed', [
-    {
-      id: 1,
-      headline: "Welcome to the Paper Trading Floor!",
-      target: "ALL",
-      impact: 0,
-      type: "neutral",
-      body: "Start trading, learn from the modules, and watch how real-time news affects the mock market.",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-  ]));
-  
-  // Active news impact drift overrides
-  const [newsDrifts, setNewsDrifts] = useState({});
-  const [audioNotifications, setAudioNotifications] = useState(true);
-  
-  // Alert/Toast feedback systems
-  const [appAlert, setAppAlert] = useState(null);
+  // Real-time API state indicators
+  const [isApiLoading, setIsApiLoading] = useState(false);
+  const [apiErrorMsg, setApiErrorMsg] = useState(null);
 
-  // Sync state to localStorage on changes
+  // Floating notifications
+  const [appAlert, setAppAlert] = useState(null);
+  const [audioNotifications, setAudioNotifications] = useState(true);
+
+  // Sync to local storage
   useEffect(() => { saveState('cash', cash); }, [cash]);
   useEffect(() => { saveState('portfolio', portfolio); }, [portfolio]);
   useEffect(() => { saveState('stocks', stocks); }, [stocks]);
@@ -359,69 +330,251 @@ export const MarketProvider = ({ children }) => {
   useEffect(() => { saveState('badges', badges); }, [badges]);
   useEffect(() => { saveState('lessons', lessons); }, [lessons]);
   useEffect(() => { saveState('transactionHistory', transactionHistory); }, [transactionHistory]);
-  useEffect(() => { saveState('newsFeed', newsFeed); }, [newsFeed]);
 
-  // Audio Feedback using Web Audio API
+  const triggerAlert = useCallback((message, type = 'info') => {
+    setAppAlert({ message, type });
+    setTimeout(() => setAppAlert(null), 4500);
+  }, []);
+
   const playSound = useCallback((type) => {
     if (!audioNotifications) return;
     try {
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return;
       const ctx = new AudioContext();
-      
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
       
       if (type === 'success') {
-        // High double-beep
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
         osc.start();
-        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
-        gain.gain.setValueAtTime(0.1, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1);
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
         osc.stop(ctx.currentTime + 0.3);
       } else if (type === 'error') {
-        // Low buzzer
-        osc.frequency.setValueAtTime(150, ctx.currentTime);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        osc.frequency.setValueAtTime(140, ctx.currentTime);
+        gain.gain.setValueAtTime(0.12, ctx.currentTime);
         osc.start();
         gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
         osc.stop(ctx.currentTime + 0.3);
       } else if (type === 'achievement') {
-        // Melodic arpeggio
-        osc.frequency.setValueAtTime(261.63, ctx.currentTime); // C4
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        osc.frequency.setValueAtTime(261.63, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
         osc.start();
-        osc.frequency.setValueAtTime(329.63, ctx.currentTime + 0.08); // E4
-        osc.frequency.setValueAtTime(392.00, ctx.currentTime + 0.16); // G4
-        osc.frequency.setValueAtTime(523.25, ctx.currentTime + 0.24); // C5
-        gain.gain.setValueAtTime(0.15, ctx.currentTime + 0.24);
-        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.6);
-        osc.stop(ctx.currentTime + 0.6);
+        osc.frequency.setValueAtTime(329.63, ctx.currentTime + 0.08);
+        osc.frequency.setValueAtTime(392.00, ctx.currentTime + 0.16);
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime + 0.24);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+        osc.stop(ctx.currentTime + 0.5);
       }
-    } catch (e) {
-      console.warn("AudioContext failed to trigger", e);
-    }
+    } catch (e) {}
   }, [audioNotifications]);
 
-  // Trigger alert banner
-  const triggerAlert = useCallback((message, type = 'info') => {
-    setAppAlert({ message, type });
-    setTimeout(() => {
-      setAppAlert(null);
-    }, 4500);
+  // Search stocks suggestion endpoint proxy
+  const searchRealTimeStock = async (query) => {
+    if (!query || query.trim().length < 2) return [];
+    try {
+      const response = await fetch(`/api-yahoo/v1/finance/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      
+      // Filter out non-equities
+      const quotes = data.quotes || [];
+      return quotes
+        .filter(q => q.quoteType === 'EQUITY' || q.typeDisp === 'Equity')
+        .map(q => ({
+          ticker: q.symbol,
+          name: q.longname || q.shortname || q.symbol,
+          exchange: q.exchange,
+          sector: q.sector || 'Global Equity'
+        }));
+    } catch (e) {
+      console.warn("Autocompletion search failed", e);
+      return [];
+    }
+  };
+
+  // Fetch chart history for active view
+  const fetchStockHistoryFromAPI = async (ticker, range = '1d') => {
+    const interval = range === '1d' ? '15m' : '1d';
+    try {
+      const response = await fetch(`/api-yahoo/v8/finance/chart/${ticker}?interval=${interval}&range=${range}`);
+      const data = await response.json();
+      const result = data?.chart?.result?.[0];
+      if (!result) return null;
+
+      const timestamps = result.timestamp || [];
+      const quote = result.indicators?.quote?.[0] || {};
+      const meta = result.meta || {};
+
+      const historyPoints = [];
+      timestamps.forEach((t, index) => {
+        const o = quote.open?.[index];
+        const h = quote.high?.[index];
+        const l = quote.low?.[index];
+        const c = quote.close?.[index];
+        
+        if (o !== null && c !== null && h !== null && l !== null && o !== undefined) {
+          const date = new Date(t * 1000);
+          const timeStr = range === '1d' 
+            ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
+          historyPoints.push({
+            time: timeStr,
+            open: parseFloat(o.toFixed(2)),
+            high: parseFloat(h.toFixed(2)),
+            low: parseFloat(l.toFixed(2)),
+            close: parseFloat(c.toFixed(2)),
+            price: parseFloat(c.toFixed(2))
+          });
+        }
+      });
+
+      return {
+        price: meta.regularMarketPrice,
+        open: meta.regularMarketOpen || meta.chartPreviousClose || meta.regularMarketPrice,
+        high: meta.regularMarketDayHigh || meta.regularMarketPrice,
+        low: meta.regularMarketDayLow || meta.regularMarketPrice,
+        prevClose: meta.chartPreviousClose || meta.regularMarketPrice,
+        history: historyPoints,
+        name: meta.longName || meta.shortName || ticker,
+        exchange: meta.exchangeName
+      };
+    } catch (e) {
+      console.error(`Error fetching history for ${ticker}`, e);
+      return null;
+    }
+  };
+
+  // Sync / refresh real-time prices for list & portfolio
+  const syncStocksListWithAPI = useCallback(async () => {
+    setIsApiLoading(true);
+    setApiErrorMsg(null);
+
+    // Make list of tickers we care about
+    const watchlistTickers = stocks.map(s => s.ticker);
+    const portfolioTickers = Object.keys(portfolio);
+    const uniqueTickers = [...new Set([...watchlistTickers, ...portfolioTickers])];
+
+    if (uniqueTickers.length === 0) {
+      setIsApiLoading(false);
+      return;
+    }
+
+    try {
+      const promises = uniqueTickers.map(ticker => fetchStockHistoryFromAPI(ticker, '1d'));
+      const results = await Promise.all(promises);
+
+      let updatedStocks = [...stocks];
+      let updatedHistory = { ...priceHistory };
+
+      results.forEach((res, index) => {
+        const ticker = uniqueTickers[index];
+        if (res) {
+          // 1. Update stock prices in state
+          const existingStockIdx = updatedStocks.findIndex(s => s.ticker === ticker);
+          
+          const updatedInfo = {
+            ticker,
+            name: res.name,
+            price: parseFloat(res.price.toFixed(2)),
+            open: parseFloat(res.open.toFixed(2)),
+            high: parseFloat(res.high.toFixed(2)),
+            low: parseFloat(res.low.toFixed(2)),
+            prevClose: parseFloat(res.prevClose.toFixed(2)),
+            sector: updatedStocks[existingStockIdx]?.sector || 'Finance & Equity',
+            volatility: updatedStocks[existingStockIdx]?.volatility || 0.015,
+            desc: updatedStocks[existingStockIdx]?.desc || `Real-time public stock listed on ${res.exchange}`
+          };
+
+          if (existingStockIdx > -1) {
+            updatedStocks[existingStockIdx] = updatedInfo;
+          } else {
+            updatedStocks.push(updatedInfo); // Add searched/imported stock to our local list
+          }
+
+          // 2. Update price history (limit to 40 data points)
+          if (res.history && res.history.length > 0) {
+            updatedHistory[ticker] = res.history.slice(-40);
+          }
+        }
+      });
+
+      setStocks(updatedStocks);
+      setPriceHistory(updatedHistory);
+    } catch (e) {
+      setApiErrorMsg("Real-time API is currently rate-limited. Falling back to local market snapshots.");
+      console.warn("Sync failed, rate limit or network issue.", e);
+    } finally {
+      setIsApiLoading(false);
+    }
+  }, [stocks, portfolio, priceHistory]);
+
+  // Sync on startup, and set up automatic periodic sync every 15 seconds
+  useEffect(() => {
+    syncStocksListWithAPI();
+
+    const interval = setInterval(() => {
+      // Sync only if tab is not focused on quiz slide to prevent CPU waste
+      syncStocksListWithAPI();
+    }, 15000);
+
+    return () => clearInterval(interval);
   }, []);
 
-  // XP level calculation helper
+  // Add stock lookup & subscribe mechanism
+  const addStockToWatchlist = useCallback(async (ticker) => {
+    if (stocks.some(s => s.ticker === ticker)) {
+      setSelectedStockTicker(ticker);
+      return true;
+    }
+
+    setIsApiLoading(true);
+    const data = await fetchStockHistoryFromAPI(ticker, '1d');
+    setIsApiLoading(false);
+
+    if (data) {
+      const newStock = {
+        ticker,
+        name: data.name,
+        price: data.price,
+        open: data.open,
+        high: data.high,
+        low: data.low,
+        prevClose: data.prevClose,
+        sector: 'Searched Stock',
+        volatility: 0.015,
+        desc: `Public equity listed on ${data.exchange}. Added from real-time quote search.`
+      };
+
+      setStocks(prev => [...prev, newStock]);
+      if (data.history && data.history.length > 0) {
+        setPriceHistory(prev => ({ ...prev, [ticker]: data.history.slice(-40) }));
+      }
+      setSelectedStockTicker(ticker);
+      triggerAlert(`Added ${ticker} to active watchlist!`, 'success');
+      return true;
+    } else {
+      playSound('error');
+      triggerAlert(`Could not retrieve quote details for ${ticker}.`, 'error');
+      return false;
+    }
+  }, [stocks, triggerAlert, playSound]);
+
+  const checkAndAwardBadge = useCallback((badgeName, desc) => {
+    setBadges(prev => {
+      if (prev.some(b => b.name === badgeName)) return prev;
+      const newBadge = { name: badgeName, description: desc, earnedAt: new Date().toLocaleDateString() };
+      playSound('achievement');
+      triggerAlert(`Unlocked Badge: ${badgeName}!`, 'success');
+      return [...prev, newBadge];
+    });
+  }, [playSound, triggerAlert]);
+
   const getLevelInfo = useCallback(() => {
-    // 0-100: Level 1 (Novice)
-    // 101-300: Level 2 (Retail Investor)
-    // 301-600: Level 3 (Swing Trader)
-    // 601-1000: Level 4 (Portfolio Manager)
-    // 1001+: Level 5 (Market Guru)
     let currentLvl = 1;
     let rankName = "Novice Trader";
     let nextXpLimit = 100;
@@ -430,7 +583,7 @@ export const MarketProvider = ({ children }) => {
     if (xp >= 1000) {
       currentLvl = 5;
       rankName = "Market Guru";
-      nextXpLimit = xp; // Maxed
+      nextXpLimit = xp;
       prevXpLimit = 1000;
     } else if (xp >= 600) {
       currentLvl = 4;
@@ -450,23 +603,10 @@ export const MarketProvider = ({ children }) => {
     }
     
     const progressPercent = nextXpLimit === prevXpLimit ? 100 : Math.round(((xp - prevXpLimit) / (nextXpLimit - prevXpLimit)) * 100);
-    
     return { level: currentLvl, rankName, xp, nextXpLimit, prevXpLimit, progressPercent };
   }, [xp]);
 
-  // Award achievements
-  const checkAndAwardBadge = useCallback((badgeName, desc) => {
-    setBadges(prev => {
-      if (prev.some(b => b.name === badgeName)) return prev;
-      
-      const newBadge = { name: badgeName, description: desc, earnedAt: new Date().toLocaleDateString() };
-      playSound('achievement');
-      triggerAlert(`Unlocked Badge: ${badgeName}!`, 'success');
-      return [...prev, newBadge];
-    });
-  }, [playSound, triggerAlert]);
-
-  // Main Buy Order logic
+  // Buy Order
   const buyStock = useCallback((ticker, quantity) => {
     const qty = parseInt(quantity);
     if (isNaN(qty) || qty <= 0) {
@@ -518,7 +658,7 @@ export const MarketProvider = ({ children }) => {
     return true;
   }, [stocks, cash, playSound, triggerAlert, checkAndAwardBadge]);
 
-  // Main Sell Order logic
+  // Sell Order
   const sellStock = useCallback((ticker, quantity) => {
     const qty = parseInt(quantity);
     if (isNaN(qty) || qty <= 0) {
@@ -569,13 +709,12 @@ export const MarketProvider = ({ children }) => {
     playSound('success');
     triggerAlert(`Successfully sold ${qty} shares of ${ticker}!`, "success");
     
-    if (profitLoss > 100) {
-      checkAndAwardBadge("Profit Maker", "Booked a profit of over $100 on a single transaction.");
+    if (profitLoss > 1000) {
+      checkAndAwardBadge("Profit Maker", "Booked a profit of over ₹1,000 on a single transaction.");
     }
     return true;
   }, [stocks, portfolio, playSound, triggerAlert, checkAndAwardBadge]);
 
-  // Lesson quiz completion
   const submitQuizAnswers = useCallback((lessonId, score) => {
     let earnedXP = 0;
     setLessons(prev => prev.map(lesson => {
@@ -583,11 +722,7 @@ export const MarketProvider = ({ children }) => {
         if (!lesson.completed) {
           earnedXP = lesson.xpReward;
         }
-        return {
-          ...lesson,
-          completed: true,
-          quizScore: score
-        };
+        return { ...lesson, completed: true, quizScore: score };
       }
       return lesson;
     }));
@@ -597,151 +732,12 @@ export const MarketProvider = ({ children }) => {
       triggerAlert(`Completed Lesson! +${earnedXP} XP Earned.`, 'success');
       playSound('achievement');
       
-      // Unlock achievement check
       const completedCount = lessons.filter(l => l.id === lessonId ? true : l.completed).length;
-      if (completedCount === 1) {
-        checkAndAwardBadge("Quick Learner", "Completed your first financial lesson.");
-      }
-      if (completedCount === 5) {
-        checkAndAwardBadge("Financial Analyst", "Successfully completed all educational models.");
-      }
+      if (completedCount === 1) checkAndAwardBadge("Quick Learner", "Completed your first financial lesson.");
+      if (completedCount === 5) checkAndAwardBadge("Financial Analyst", "Successfully completed all educational models.");
     }
   }, [lessons, triggerAlert, playSound, checkAndAwardBadge]);
 
-  // Periodically generate stock price fluctuations & market news
-  useEffect(() => {
-    const marketTick = setInterval(() => {
-      // 1. Update prices of each stock
-      setStocks(prevStocks => {
-        const nextStocks = prevStocks.map(stock => {
-          // Check news override impact
-          const newsDrift = newsDrifts[stock.ticker] || 0;
-          
-          // Brownian motion drift calculation
-          // Stocks will drift slightly upward on average (+0.05% default drift)
-          const baseDrift = 0.0004; 
-          const finalDrift = baseDrift + newsDrift;
-          const randomWalk = (Math.random() - 0.48) * 2 * stock.volatility;
-          const priceMultiplier = 1 + finalDrift + randomWalk;
-          
-          const nextPrice = Math.max(2.0, parseFloat((stock.price * priceMultiplier).toFixed(2)));
-          
-          // Calculate daily high/lows
-          const high = parseFloat(Math.max(stock.high, nextPrice).toFixed(2));
-          const low = parseFloat(Math.min(stock.low, nextPrice).toFixed(2));
-          
-          return {
-            ...stock,
-            price: nextPrice,
-            high,
-            low
-          };
-        });
-
-        // 2. Append new prices to chart history
-        setPriceHistory(prevHistory => {
-          const nextHistory = { ...prevHistory };
-          nextStocks.forEach(s => {
-            const hist = [...(nextHistory[s.ticker] || [])];
-            const lastCandle = hist[hist.length - 1];
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-            
-            // Build OHLC candle representation for the tick
-            const open = lastCandle ? lastCandle.close : s.price;
-            const close = s.price;
-            const high = Math.max(open, close) * (1 + Math.random() * 0.002);
-            const low = Math.min(open, close) * (1 - Math.random() * 0.002);
-            
-            hist.push({
-              time: timeStr,
-              open,
-              high: parseFloat(high.toFixed(2)),
-              low: parseFloat(low.toFixed(2)),
-              close,
-              price: close
-            });
-            
-            // Keep history window at 40 candles for dashboard scaling
-            if (hist.length > 40) {
-              hist.shift();
-            }
-            nextHistory[s.ticker] = hist;
-          });
-          return nextHistory;
-        });
-
-        // Decay news overrides over time
-        setNewsDrifts(prevDrifts => {
-          const updated = { ...prevDrifts };
-          Object.keys(updated).forEach(ticker => {
-            if (Math.abs(updated[ticker]) < 0.002) {
-              delete updated[ticker];
-            } else {
-              updated[ticker] *= 0.75; // Decay by 25% per tick
-            }
-          });
-          return updated;
-        });
-
-        return nextStocks;
-      });
-    }, 4000);
-
-    return () => clearInterval(marketTick);
-  }, [newsDrifts]);
-
-  // Periodic news events scheduler
-  useEffect(() => {
-    const triggerRandomNews = () => {
-      // Choose random news headline
-      const template = NEWS_TEMPLATES[Math.floor(Math.random() * NEWS_TEMPLATES.length)];
-      const now = new Date();
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      
-      const newEvent = {
-        id: Math.random().toString(36).substr(2, 9),
-        headline: template.headline,
-        target: template.target,
-        impact: template.impact,
-        type: template.type,
-        body: template.body,
-        timestamp: timeStr
-      };
-
-      setNewsFeed(prev => [newEvent, ...prev.slice(0, 15)]);
-      
-      // Inject directional stock price pressure
-      setNewsDrifts(prev => ({
-        ...prev,
-        [template.target]: template.impact * 0.45 // Initial drift impact
-      }));
-
-      // Trigger notification banner
-      const sentimentText = template.type === 'good' ? '🟢 POSITIVE' : '🔴 NEGATIVE';
-      triggerAlert(`[NEWS] ${sentimentText} for ${template.target}: ${template.headline}`);
-      
-      if (audioNotifications) {
-        playSound('achievement'); // soft chime
-      }
-    };
-
-    // Trigger initial news after 10s, then random news every 35-50 seconds
-    const firstNewsTimer = setTimeout(triggerRandomNews, 12000);
-    
-    const newsInterval = setInterval(() => {
-      if (Math.random() > 0.3) { // 70% chance to fire
-        triggerRandomNews();
-      }
-    }, 35000);
-
-    return () => {
-      clearTimeout(firstNewsTimer);
-      clearInterval(newsInterval);
-    };
-  }, [audioNotifications, playSound, triggerAlert]);
-
-  // Value calculation helpers
   const getPortfolioValue = useCallback(() => {
     let holdingsVal = 0;
     Object.keys(portfolio).forEach(ticker => {
@@ -771,7 +767,6 @@ export const MarketProvider = ({ children }) => {
       transactionHistory,
       selectedStockTicker,
       setSelectedStockTicker,
-      newsFeed,
       getLevelInfo,
       buyStock,
       sellStock,
@@ -782,7 +777,13 @@ export const MarketProvider = ({ children }) => {
       audioNotifications,
       setAudioNotifications,
       triggerAlert,
-      playSound
+      playSound,
+      searchRealTimeStock,
+      addStockToWatchlist,
+      fetchStockHistoryFromAPI,
+      isApiLoading,
+      apiErrorMsg,
+      syncStocksListWithAPI
     }}>
       {children}
     </MarketContext.Provider>

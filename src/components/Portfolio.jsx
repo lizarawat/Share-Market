@@ -3,8 +3,6 @@ import { useMarket } from '../context/MarketContext';
 import { 
   TrendingUp, 
   TrendingDown, 
-  DollarSign, 
-  Briefcase, 
   History, 
   ArrowUpRight, 
   ArrowDownRight,
@@ -36,21 +34,19 @@ const Portfolio = () => {
   const totalReturn = portfolioValue - totalCostBasis;
   const totalReturnPercent = totalCostBasis === 0 ? 0 : parseFloat(((totalReturn / totalCostBasis) * 100).toFixed(2));
 
-  // Sector and Asset Allocation breakdown
+  // Asset allocation breakdown
   const allocation = [];
   let totalAllocated = cash + portfolioValue;
 
-  // Add Cash segment
   if (cash > 0) {
     allocation.push({
       name: 'Liquid Cash',
       value: cash,
       pct: parseFloat(((cash / totalAllocated) * 100).toFixed(1)),
-      color: '#10b981' // Green
+      color: '#10b981'
     });
   }
 
-  // Sector breakdown
   const sectorValues = {};
   Object.keys(portfolio).forEach(ticker => {
     const stock = stocks.find(s => s.ticker === ticker);
@@ -62,13 +58,14 @@ const Portfolio = () => {
   });
 
   const sectorColors = {
-    'Technology': '#6366f1',    // Indigo
-    'Green Energy': '#06b6d4',  // Cyan
-    'Healthcare': '#8b5cf6',    // Violet
-    'Real Estate': '#f59e0b',   // Amber
-    'Automotive': '#ec4899',   // Pink
-    'FMCG': '#14b8a6',         // Teal
-    'Finance': '#3b82f6'        // Blue
+    'Technology': '#6366f1',
+    'Telecom': '#06b6d4',
+    'Healthcare': '#8b5cf6',
+    'Real Estate': '#f59e0b',
+    'Automotive': '#ec4899',
+    'FMCG': '#14b8a6',
+    'Finance': '#3b82f6',
+    'Searched Stock': '#a855f7'
   };
 
   Object.keys(sectorValues).forEach(sector => {
@@ -81,7 +78,6 @@ const Portfolio = () => {
     });
   });
 
-  // Handle click on holding to trade
   const handleTradeClick = (ticker) => {
     setSelectedStockTicker(ticker);
     setActiveTab('simulator');
@@ -92,7 +88,7 @@ const Portfolio = () => {
       
       {/* Page Title */}
       <div>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>Portfolio Analysis</h1>
+        <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>Portfolio Valuation</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Evaluate holdings, trace sector concentration, and examine transaction receipts.</p>
       </div>
 
@@ -101,27 +97,27 @@ const Portfolio = () => {
         <div>
           <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Combined Equity Value</span>
           <h2 style={{ fontSize: '2rem', fontWeight: 800, marginTop: '0.2rem' }}>
-            ${netWorth.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            ₹{netWorth.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
           </h2>
         </div>
         <div style={{ display: 'flex', gap: '2rem' }}>
           <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '1.25rem' }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Invested Assets</span>
-            <h4 style={{ fontSize: '1.15rem', fontWeight: 700, marginTop: '0.15rem' }}>${portfolioValue.toLocaleString('en-US')}</h4>
+            <h4 style={{ fontSize: '1.15rem', fontWeight: 700, marginTop: '0.15rem' }}>₹{portfolioValue.toLocaleString('en-IN')}</h4>
           </div>
           <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '1.25rem' }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Liquid Balance</span>
-            <h4 style={{ fontSize: '1.15rem', fontWeight: 700, marginTop: '0.15rem' }}>${cash.toLocaleString('en-US')}</h4>
+            <h4 style={{ fontSize: '1.15rem', fontWeight: 700, marginTop: '0.15rem' }}>₹{cash.toLocaleString('en-IN')}</h4>
           </div>
           <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '1.25rem' }}>
             <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Return</span>
             {totalReturn >= 0 ? (
               <h4 className="stat-up" style={{ fontSize: '1.15rem', fontWeight: 700, marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                <TrendingUp size={16} /> +${totalReturn.toFixed(2)} (+{totalReturnPercent}%)
+                <TrendingUp size={16} /> +₹{totalReturn.toFixed(2)} (+{totalReturnPercent}%)
               </h4>
             ) : (
               <h4 className="stat-down" style={{ fontSize: '1.15rem', fontWeight: 700, marginTop: '0.15rem', display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                <TrendingDown size={16} /> -${Math.abs(totalReturn).toFixed(2)} ({totalReturnPercent}%)
+                <TrendingDown size={16} /> -₹{Math.abs(totalReturn).toFixed(2)} ({totalReturnPercent}%)
               </h4>
             )}
           </div>
@@ -182,7 +178,7 @@ const Portfolio = () => {
                   className="btn btn-primary" 
                   style={{ marginTop: '1rem', padding: '0.5rem 1rem', fontSize: '0.8rem' }}
                 >
-                  Go Buy Your First Stock
+                  Start Trading NSE Stocks
                 </button>
               </div>
             ) : (
@@ -221,16 +217,16 @@ const Portfolio = () => {
                           <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400 }}>{stock.name}</span>
                         </td>
                         <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>{hold.quantity}</td>
-                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right' }}>${hold.avgPrice.toFixed(2)}</td>
-                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>${stock.price.toFixed(2)}</td>
-                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 700 }}>${marketValue.toFixed(2)}</td>
+                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right' }}>₹{hold.avgPrice.toFixed(2)}</td>
+                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>₹{stock.price.toFixed(2)}</td>
+                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 700 }}>₹{marketValue.toFixed(2)}</td>
                         <td style={{ 
                           padding: '0.8rem 0.5rem', 
                           textAlign: 'right', 
                           fontWeight: 700, 
                           color: isGain ? 'var(--success)' : 'var(--danger)' 
                         }}>
-                          <div>{isGain ? `+$${profitLoss.toFixed(2)}` : `-$${Math.abs(profitLoss).toFixed(2)}`}</div>
+                          <div>{isGain ? `+₹${profitLoss.toFixed(2)}` : `-₹${Math.abs(profitLoss).toFixed(2)}`}</div>
                           <span style={{ fontSize: '0.65rem' }}>{isGain ? `+${profitLossPct}%` : `${profitLossPct}%`}</span>
                         </td>
                       </tr>
@@ -296,10 +292,10 @@ const Portfolio = () => {
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-                        ${(log.price * log.quantity).toFixed(2)}
+                        ₹{(log.price * log.quantity).toFixed(2)}
                       </div>
                       <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                        @{log.price.toFixed(2)} / share
+                        @₹{log.price.toFixed(2)} / share
                       </span>
                     </div>
                   </div>

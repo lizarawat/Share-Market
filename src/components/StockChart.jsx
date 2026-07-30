@@ -1,13 +1,56 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useMarket } from '../context/MarketContext';
+import { Calendar } from 'lucide-react';
 
 const StockChart = ({ ticker }) => {
-  const { priceHistory } = useMarket();
+  const { priceHistory, fetchStockHistoryFromAPI } = useMarket();
   const [chartType, setChartType] = useState('candlestick'); // 'line' or 'candlestick'
+  const [timeRange, setTimeRange] = useState('1d'); // '1d' or '1mo'
   const [showSMA, setShowSMA] = useState(false);
   const [hoverIndex, setHoverIndex] = useState(null);
+  
+  // Local chart data loaded from API
+  const [chartData, setChartData] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const data = priceHistory[ticker] || [];
+  // Fetch history from API whenever ticker or range changes
+  useEffect(() => {
+    let active = true;
+    const loadHistory = async () => {
+      setIsLoading(true);
+      const data = await fetchStockHistoryFromAPI(ticker, timeRange);
+      if (active) {
+        if (data && data.history && data.history.length > 0) {
+          setChartData(data.history);
+        } else {
+          // Fall back to context watchlist history if API fails
+          setChartData(priceHistory[ticker] || []);
+        }
+        setIsLoading(false);
+      }
+    };
+    loadHistory();
+    return () => { active = false; };
+  }, [ticker, timeRange, priceHistory]);
+
+  const data = chartData;
+
+  if (isLoading) {
+    return (
+      <div style={{
+        height: '100%',
+        width: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'rgba(255, 255, 255, 0.01)',
+        border: '1px solid var(--border)',
+        borderRadius: '10px'
+      }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Fetching real-time market candlesticks...</p>
+      </div>
+    );
+  }
 
   if (data.length < 2) {
     return (
@@ -21,7 +64,7 @@ const StockChart = ({ ticker }) => {
         border: '1px solid var(--border)',
         borderRadius: '10px'
       }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Loading price ticks...</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No price ticks available for {ticker}</p>
       </div>
     );
   }
@@ -37,7 +80,7 @@ const StockChart = ({ ticker }) => {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  // Find min and max values to scale Y-axis
+  // Scaling limits
   let allVals = [];
   data.forEach(d => {
     allVals.push(d.high, d.low, d.open, d.close);
@@ -45,13 +88,11 @@ const StockChart = ({ ticker }) => {
   const maxVal = Math.max(...allVals);
   const minVal = Math.min(...allVals);
   
-  // Pad Y-axis values
   const valRange = maxVal - minVal;
-  const yPad = valRange === 0 ? 2 : valRange * 0.08;
+  const yPad = valRange === 0 ? 10 : valRange * 0.06;
   const yMax = maxVal + yPad;
-  const yMin = Math.max(0.5, minVal - yPad);
+  const yMin = Math.max(0.1, minVal - yPad);
 
-  // Coordinate Conversion Helpers
   const getX = (index) => {
     return paddingLeft + (index / (data.length - 1)) * chartWidth;
   };
@@ -60,7 +101,7 @@ const StockChart = ({ ticker }) => {
     return paddingTop + chartHeight - ((value - yMin) / (yMax - yMin)) * chartHeight;
   };
 
-  // 1. Generate line path for Line Chart
+  // Line Chart path
   let linePath = "";
   data.forEach((d, idx) => {
     const x = getX(idx);
@@ -72,11 +113,9 @@ const StockChart = ({ ticker }) => {
     }
   });
 
-  // Generate Area under line path
   const areaPath = linePath ? `${linePath} L ${getX(data.length - 1)} ${getY(yMin)} L ${getX(0)} ${getY(yMin)} Z` : "";
 
-  // 2. Generate SMA-10 path
-  // SMA is computed as the average of the last 10 periods
+  // SMA computation
   let smaPath = "";
   const smaPeriod = 10;
   const smaData = [];
@@ -102,7 +141,7 @@ const StockChart = ({ ticker }) => {
     }
   });
 
-  // Horizontal Gridlines
+  // Y-Axis division lines
   const gridLines = [];
   const gridCount = 4;
   for (let i = 0; i <= gridCount; i++) {
@@ -110,12 +149,9 @@ const StockChart = ({ ticker }) => {
     gridLines.push(val);
   }
 
-  // Hover tracker
   const handleMouseMove = (e) => {
     const svgRect = e.currentTarget.getBoundingClientRect();
     const mouseX = e.clientX - svgRect.left;
-    
-    // Scale coordinate back to data index
     const relativeX = mouseX - paddingLeft;
     const index = Math.round((relativeX / chartWidth) * (data.length - 1));
     
@@ -133,39 +169,77 @@ const StockChart = ({ ticker }) => {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%', width: '100%' }}>
       
-      {/* Chart Control Bar */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: '0.4rem', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
-          <button
-            onClick={() => setChartType('candlestick')}
-            style={{
-              padding: '0.3rem 0.65rem',
-              borderRadius: '6px',
-              border: 'none',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              background: chartType === 'candlestick' ? 'var(--primary)' : 'transparent',
-              color: chartType === 'candlestick' ? '#fff' : 'var(--text-secondary)'
-            }}
-          >
-            Candles
-          </button>
-          <button
-            onClick={() => setChartType('line')}
-            style={{
-              padding: '0.3rem 0.65rem',
-              borderRadius: '6px',
-              border: 'none',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-              background: chartType === 'line' ? 'var(--primary)' : 'transparent',
-              color: chartType === 'line' ? '#fff' : 'var(--text-secondary)'
-            }}
-          >
-            Line
-          </button>
+      {/* Control row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+        
+        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+          {/* Chart type switch */}
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <button
+              onClick={() => setChartType('candlestick')}
+              style={{
+                padding: '0.3rem 0.65rem',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: chartType === 'candlestick' ? 'var(--primary)' : 'transparent',
+                color: chartType === 'candlestick' ? '#fff' : 'var(--text-secondary)'
+              }}
+            >
+              Candles
+            </button>
+            <button
+              onClick={() => setChartType('line')}
+              style={{
+                padding: '0.3rem 0.65rem',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: chartType === 'line' ? 'var(--primary)' : 'transparent',
+                color: chartType === 'line' ? '#fff' : 'var(--text-secondary)'
+              }}
+            >
+              Line
+            </button>
+          </div>
+
+          {/* Time range switch */}
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+            <button
+              onClick={() => setTimeRange('1d')}
+              style={{
+                padding: '0.3rem 0.65rem',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: timeRange === '1d' ? 'var(--accent)' : 'transparent',
+                color: timeRange === '1d' ? '#fff' : 'var(--text-secondary)'
+              }}
+            >
+              1 Day
+            </button>
+            <button
+              onClick={() => setTimeRange('1mo')}
+              style={{
+                padding: '0.3rem 0.65rem',
+                borderRadius: '6px',
+                border: 'none',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                background: timeRange === '1mo' ? 'var(--accent)' : 'transparent',
+                color: timeRange === '1mo' ? '#fff' : 'var(--text-secondary)'
+              }}
+            >
+              1 Month
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -181,7 +255,7 @@ const StockChart = ({ ticker }) => {
         </div>
       </div>
 
-      {/* SVG Canvas Container */}
+      {/* Drawing Board */}
       <div style={{ position: 'relative', flex: 1, minHeight: '230px' }}>
         <svg
           width="100%"
@@ -192,7 +266,7 @@ const StockChart = ({ ticker }) => {
           onMouseLeave={handleMouseLeave}
           style={{ overflow: 'visible', userSelect: 'none' }}
         >
-          {/* Grid lines & Y Axis Labels */}
+          {/* Grid lines and Y ticks */}
           {gridLines.map((val, idx) => {
             const y = getY(val);
             return (
@@ -214,16 +288,15 @@ const StockChart = ({ ticker }) => {
                   fontFamily="Inter"
                   fontWeight="500"
                 >
-                  ${val.toFixed(1)}
+                  ₹{val.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
                 </text>
               </g>
             );
           })}
 
-          {/* Line Chart Area */}
+          {/* Line view */}
           {chartType === 'line' && (
             <>
-              {/* Gradient Area Fill */}
               <defs>
                 <linearGradient id="chart-area-grad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.25" />
@@ -242,7 +315,7 @@ const StockChart = ({ ticker }) => {
             </>
           )}
 
-          {/* Candlestick Chart Area */}
+          {/* Candle view */}
           {chartType === 'candlestick' && 
             data.map((d, idx) => {
               const isBullish = d.close >= d.open;
@@ -259,7 +332,6 @@ const StockChart = ({ ticker }) => {
 
               return (
                 <g key={idx}>
-                  {/* Wick (high to low) */}
                   <line
                     x1={x}
                     y1={highY}
@@ -268,7 +340,6 @@ const StockChart = ({ ticker }) => {
                     stroke={color}
                     strokeWidth="1.2"
                   />
-                  {/* Body (open to close) */}
                   <rect
                     x={x - candleWidth / 2}
                     y={candleY}
@@ -282,7 +353,7 @@ const StockChart = ({ ticker }) => {
             })
           }
 
-          {/* SMA Line Overlay */}
+          {/* SMA line overlay */}
           {showSMA && smaPath && (
             <path
               d={smaPath}
@@ -293,7 +364,7 @@ const StockChart = ({ ticker }) => {
             />
           )}
 
-          {/* Hover Crosshair */}
+          {/* Crosshair indicator */}
           {hoverIndex !== null && (
             <g>
               <line
@@ -316,10 +387,10 @@ const StockChart = ({ ticker }) => {
             </g>
           )}
 
-          {/* X Axis Labels */}
+          {/* X ticks */}
           {data.map((d, idx) => {
-            // Render label every 8 ticks to prevent clutter
-            if (idx % 8 === 0) {
+            const step = Math.ceil(data.length / 5);
+            if (idx % step === 0 || idx === data.length - 1) {
               return (
                 <text
                   key={idx}
@@ -338,7 +409,7 @@ const StockChart = ({ ticker }) => {
           })}
         </svg>
 
-        {/* Hover Tooltip Modal */}
+        {/* Floating Tooltip */}
         {activeHoverData && (
           <div style={{
             position: 'absolute',
@@ -358,24 +429,24 @@ const StockChart = ({ ticker }) => {
             backdropFilter: 'blur(4px)'
           }}>
             <div>
-              <p style={{ color: 'var(--text-muted)' }}>Time</p>
+              <p style={{ color: 'var(--text-muted)' }}>Date/Time</p>
               <p style={{ fontWeight: 700 }}>{activeHoverData.time}</p>
             </div>
             <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '0.50rem' }}>
               <p style={{ color: 'var(--text-muted)' }}>Open</p>
-              <p style={{ fontWeight: 700 }}>${activeHoverData.open}</p>
+              <p style={{ fontWeight: 700 }}>₹{activeHoverData.open}</p>
             </div>
             <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '0.50rem' }}>
               <p style={{ color: 'var(--text-muted)' }}>High</p>
-              <p style={{ fontWeight: 700, color: 'var(--success)' }}>${activeHoverData.high}</p>
+              <p style={{ fontWeight: 700, color: 'var(--success)' }}>₹{activeHoverData.high}</p>
             </div>
             <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '0.50rem' }}>
               <p style={{ color: 'var(--text-muted)' }}>Low</p>
-              <p style={{ fontWeight: 700, color: 'var(--danger)' }}>${activeHoverData.low}</p>
+              <p style={{ fontWeight: 700, color: 'var(--danger)' }}>₹{activeHoverData.low}</p>
             </div>
             <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '0.50rem' }}>
               <p style={{ color: 'var(--text-muted)' }}>Close</p>
-              <p style={{ fontWeight: 700 }}>${activeHoverData.close}</p>
+              <p style={{ fontWeight: 700 }}>₹{activeHoverData.close}</p>
             </div>
           </div>
         )}
