@@ -414,8 +414,7 @@ export const MarketProvider = ({ children }) => {
   };
 
   // Fetch chart history for active view (wrapped in useCallback to prevent infinite render loops)
-  const fetchStockHistoryFromAPI = useCallback(async (ticker, range = '1d') => {
-    const interval = range === '1d' ? '15m' : '1d';
+  const fetchStockHistoryFromAPI = useCallback(async (ticker, range = '1d', interval = '15m') => {
     try {
       const response = await fetch(`/api-yahoo/v8/finance/chart/${ticker}?interval=${interval}&range=${range}`);
       const data = await response.json();

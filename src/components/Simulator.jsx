@@ -36,6 +36,25 @@ const Simulator = () => {
   const [localSearching, setLocalSearching] = useState(false);
   const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
 
+  // Recent searches state
+  const [recentSearches, setRecentSearches] = useState(() => {
+    try {
+      const saved = localStorage.getItem('recent_searches_securities');
+      return saved ? JSON.parse(saved) : ['RELIANCE.NS', 'TCS.NS', 'SBIN.NS'];
+    } catch (e) {
+      return ['RELIANCE.NS', 'TCS.NS', 'SBIN.NS'];
+    }
+  });
+
+  const addToRecentSearches = (ticker) => {
+    setRecentSearches(prev => {
+      const filtered = prev.filter(t => t !== ticker);
+      const updated = [ticker, ...filtered].slice(0, 5);
+      localStorage.setItem('recent_searches_securities', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   // Auto-complete suggestion fetcher
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
@@ -57,6 +76,7 @@ const Simulator = () => {
     if (success) {
       setLocalSearchQuery('');
       setLocalSearchResults([]);
+      addToRecentSearches(ticker);
     }
   };
 
@@ -73,6 +93,7 @@ const Simulator = () => {
     if (success) {
       setLocalSearchQuery('');
       setLocalSearchResults([]);
+      addToRecentSearches(ticker);
     } else {
       if (localSearchResults.length > 0) {
         const firstTicker = localSearchResults[0].ticker;
@@ -80,6 +101,7 @@ const Simulator = () => {
         if (successFirst) {
           setLocalSearchQuery('');
           setLocalSearchResults([]);
+          addToRecentSearches(firstTicker);
         }
       }
     }
@@ -191,6 +213,63 @@ const Simulator = () => {
                 }}
               />
             </form>
+
+            {/* Recommended & Recent Searches */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem' }}>
+              <div>
+                <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.25rem' }}>RECOMMENDED</p>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                  {['RELIANCE.NS', 'TCS.NS', 'SBIN.NS', 'TATAMOTORS.NS', 'INDOMIM.NS'].map(rec => (
+                    <button
+                      key={rec}
+                      type="button"
+                      onClick={() => handleAddStock(rec)}
+                      style={{
+                        padding: '0.2rem 0.4rem',
+                        background: 'rgba(255,255,255,0.02)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '4px',
+                        fontSize: '0.65rem',
+                        color: 'var(--text-secondary)',
+                        cursor: 'pointer',
+                        fontWeight: 600
+                      }}
+                      className="glass-card-interactive"
+                    >
+                      {rec.replace('.NS', '')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {recentSearches.length > 0 && (
+                <div>
+                  <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.25rem' }}>RECENT SEARCHES</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                    {recentSearches.map(rec => (
+                      <button
+                        key={rec}
+                        type="button"
+                        onClick={() => handleAddStock(rec)}
+                        style={{
+                          padding: '0.2rem 0.4rem',
+                          background: 'rgba(99, 102, 241, 0.04)',
+                          border: '1px solid rgba(99, 102, 241, 0.15)',
+                          borderRadius: '4px',
+                          fontSize: '0.65rem',
+                          color: 'var(--primary)',
+                          cursor: 'pointer',
+                          fontWeight: 600
+                        }}
+                        className="glass-card-interactive"
+                      >
+                        {rec.replace('.NS', '')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* Suggestions Overlay */}
             {localSearchResults.length > 0 && (

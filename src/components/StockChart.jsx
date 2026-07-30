@@ -1,11 +1,50 @@
 import React, { useState, useEffect } from 'react';
 import { useMarket } from '../context/MarketContext';
-import { Calendar } from 'lucide-react';
+import { Calendar, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+
+const TIMEFRAMES = [
+  { label: '1m', interval: '1m', range: '1d', aggregate: 1 },
+  { label: '2m', interval: '2m', range: '1d', aggregate: 1 },
+  { label: '3m', interval: '1m', range: '1d', aggregate: 3 },
+  { label: '4m', interval: '1m', range: '1d', aggregate: 4 },
+  { label: '5m', interval: '5m', range: '1d', aggregate: 1 },
+  { label: '10m', interval: '5m', range: '2d', aggregate: 2 },
+  { label: '15m', interval: '15m', range: '2d', aggregate: 1 },
+  { label: '30m', interval: '30m', range: '5d', aggregate: 1 },
+  { label: '1H', interval: '1h', range: '1mo', aggregate: 1 },
+  { label: '4H', interval: '4h', range: '3mo', aggregate: 1 },
+  { label: '1D', interval: '1d', range: '1y', aggregate: 1 },
+  { label: '1W', interval: '1wk', range: '2y', aggregate: 1 },
+  { label: '1M', interval: '1mo', range: '5y', aggregate: 1 },
+  { label: '1Y', interval: '1mo', range: 'max', aggregate: 12 }
+];
+
+const aggregateCandles = (history, groupSize) => {
+  if (!history || history.length === 0 || groupSize <= 1) return history;
+  const aggregated = [];
+  for (let i = 0; i < history.length; i += groupSize) {
+    const chunk = history.slice(i, i + groupSize);
+    if (chunk.length === 0) continue;
+    const open = chunk[0].open;
+    const close = chunk[chunk.length - 1].close;
+    const high = Math.max(...chunk.map(c => c.high));
+    const low = Math.min(...chunk.map(c => c.low));
+    aggregated.push({
+      time: chunk[0].time,
+      open,
+      high,
+      low,
+      close,
+      price: close
+    });
+  }
+  return aggregated;
+};
 
 const StockChart = ({ ticker }) => {
   const { priceHistory, fetchStockHistoryFromAPI } = useMarket();
   const [chartType, setChartType] = useState('candlestick'); // 'line' or 'candlestick'
-  const [timeRange, setTimeRange] = useState('1d'); // '1d' or '1mo'
+  const [selectedTimeframe, setSelectedTimeframe] = useState(TIMEFRAMES[10]); // default to 1D
   const [showSMA, setShowSMA] = useState(false);
   const [hoverIndex, setHoverIndex] = useState(null);
   
@@ -13,17 +52,24 @@ const StockChart = ({ ticker }) => {
   const [chartData, setChartData] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Fetch history from API whenever ticker or range changes
+  // Zoom states
+  const [zoomX, setZoomX] = useState(65); // default visible candle count span
+  const [zoomY, setZoomY] = useState(1.0); // Y-axis price scaling padding multiplier
+
+  // Fetch history from API whenever ticker or range/interval changes
   useEffect(() => {
     let active = true;
     const loadHistory = async () => {
       setIsLoading(true);
-      const data = await fetchStockHistoryFromAPI(ticker, timeRange);
+      const data = await fetchStockHistoryFromAPI(ticker, selectedTimeframe.range, selectedTimeframe.interval);
       if (active) {
         if (data && data.history && data.history.length > 0) {
-          setChartData(data.history);
+          if (selectedTimeframe.aggregate > 1) {
+            setChartData(aggregateCandles(data.history, selectedTimeframe.aggregate));
+          } else {
+            setChartData(data.history);
+          }
         } else {
-          // Fall back to context watchlist history if API fails
           setChartData(priceHistory[ticker] || []);
         }
         setIsLoading(false);
@@ -31,7 +77,12 @@ const StockChart = ({ ticker }) => {
     };
     loadHistory();
     return () => { active = false; };
-  }, [ticker, timeRange, priceHistory]);
+  }, [ticker, selectedTimeframe, priceHistory, fetchStockHistoryFromAPI]);
+
+  const resetZoom = () => {
+    setZoomX(65);
+    setZoomY(1.0);
+  };
 
   const data = chartData;
 
@@ -45,7 +96,8 @@ const StockChart = ({ ticker }) => {
         justifyContent: 'center',
         background: 'rgba(255, 255, 255, 0.01)',
         border: '1px solid var(--border)',
-        borderRadius: '10px'
+        borderRadius: '10px',
+        minHeight: '280px'
       }}>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>Fetching real-time market candlesticks...</p>
       </div>
@@ -62,12 +114,16 @@ const StockChart = ({ ticker }) => {
         justifyContent: 'center',
         background: 'rgba(255, 255, 255, 0.01)',
         border: '1px solid var(--border)',
-        borderRadius: '10px'
+        borderRadius: '10px',
+        minHeight: '280px'
       }}>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No price ticks available for {ticker}</p>
       </div>
     );
   }
+
+  // Slice data based on zoomX (Horizontal zoom)
+  const visibleData = data.slice(-Math.min(data.length, Math.max(8, zoomX)));
 
   // Dimensions of SVG
   const width = 600;
@@ -80,21 +136,23 @@ const StockChart = ({ ticker }) => {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  // Scaling limits
+  // Scaling limits based on visible data and zoomY (Vertical zoom)
   let allVals = [];
-  data.forEach(d => {
+  visibleData.forEach(d => {
     allVals.push(d.high, d.low, d.open, d.close);
   });
   const maxVal = Math.max(...allVals);
   const minVal = Math.min(...allVals);
   
   const valRange = maxVal - minVal;
-  const yPad = valRange === 0 ? 10 : valRange * 0.06;
-  const yMax = maxVal + yPad;
-  const yMin = Math.max(0.1, minVal - yPad);
+  const midVal = (maxVal + minVal) / 2;
+  const halfRange = ((valRange === 0 ? 10 : valRange) / 2) * zoomY;
+
+  const yMax = midVal + halfRange;
+  const yMin = Math.max(0.1, midVal - halfRange);
 
   const getX = (index) => {
-    return paddingLeft + (index / (data.length - 1)) * chartWidth;
+    return paddingLeft + (index / (visibleData.length - 1)) * chartWidth;
   };
 
   const getY = (value) => {
@@ -103,7 +161,7 @@ const StockChart = ({ ticker }) => {
 
   // Line Chart path
   let linePath = "";
-  data.forEach((d, idx) => {
+  visibleData.forEach((d, idx) => {
     const x = getX(idx);
     const y = getY(d.close);
     if (idx === 0) {
@@ -113,18 +171,18 @@ const StockChart = ({ ticker }) => {
     }
   });
 
-  const areaPath = linePath ? `${linePath} L ${getX(data.length - 1)} ${getY(yMin)} L ${getX(0)} ${getY(yMin)} Z` : "";
+  const areaPath = linePath ? `${linePath} L ${getX(visibleData.length - 1)} ${getY(yMin)} L ${getX(0)} ${getY(yMin)} Z` : "";
 
   // SMA computation
   let smaPath = "";
   const smaPeriod = 10;
   const smaData = [];
 
-  for (let i = 0; i < data.length; i++) {
+  for (let i = 0; i < visibleData.length; i++) {
     if (i >= smaPeriod - 1) {
       let sum = 0;
       for (let j = 0; j < smaPeriod; j++) {
-        sum += data[i - j].close;
+        sum += visibleData[i - j].close;
       }
       const avg = sum / smaPeriod;
       smaData.push({ index: i, value: avg });
@@ -153,9 +211,9 @@ const StockChart = ({ ticker }) => {
     const svgRect = e.currentTarget.getBoundingClientRect();
     const mouseX = e.clientX - svgRect.left;
     const relativeX = mouseX - paddingLeft;
-    const index = Math.round((relativeX / chartWidth) * (data.length - 1));
+    const index = Math.round((relativeX / chartWidth) * (visibleData.length - 1));
     
-    if (index >= 0 && index < data.length) {
+    if (index >= 0 && index < visibleData.length) {
       setHoverIndex(index);
     }
   };
@@ -164,24 +222,25 @@ const StockChart = ({ ticker }) => {
     setHoverIndex(null);
   };
 
-  const activeHoverData = hoverIndex !== null ? data[hoverIndex] : null;
+  const activeHoverData = hoverIndex !== null ? visibleData[hoverIndex] : null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%', width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', width: '100%' }}>
       
-      {/* Control row */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+      {/* Timeframes and layout controls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+        {/* Left Side: Type and Timeframe ribbon */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', alignItems: 'center' }}>
           {/* Chart type switch */}
-          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', padding: '0.15rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
             <button
               onClick={() => setChartType('candlestick')}
               style={{
-                padding: '0.3rem 0.65rem',
+                padding: '0.25rem 0.5rem',
                 borderRadius: '6px',
                 border: 'none',
-                fontSize: '0.75rem',
+                fontSize: '0.7rem',
                 fontWeight: 600,
                 cursor: 'pointer',
                 background: chartType === 'candlestick' ? 'var(--primary)' : 'transparent',
@@ -193,10 +252,10 @@ const StockChart = ({ ticker }) => {
             <button
               onClick={() => setChartType('line')}
               style={{
-                padding: '0.3rem 0.65rem',
+                padding: '0.25rem 0.5rem',
                 borderRadius: '6px',
                 border: 'none',
-                fontSize: '0.75rem',
+                fontSize: '0.7rem',
                 fontWeight: 600,
                 cursor: 'pointer',
                 background: chartType === 'line' ? 'var(--primary)' : 'transparent',
@@ -207,43 +266,36 @@ const StockChart = ({ ticker }) => {
             </button>
           </div>
 
-          {/* Time range switch */}
-          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
-            <button
-              onClick={() => setTimeRange('1d')}
-              style={{
-                padding: '0.3rem 0.65rem',
-                borderRadius: '6px',
-                border: 'none',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: timeRange === '1d' ? 'var(--accent)' : 'transparent',
-                color: timeRange === '1d' ? '#fff' : 'var(--text-secondary)'
-              }}
-            >
-              1 Day
-            </button>
-            <button
-              onClick={() => setTimeRange('1mo')}
-              style={{
-                padding: '0.3rem 0.65rem',
-                borderRadius: '6px',
-                border: 'none',
-                fontSize: '0.75rem',
-                fontWeight: 600,
-                cursor: 'pointer',
-                background: timeRange === '1mo' ? 'var(--accent)' : 'transparent',
-                color: timeRange === '1mo' ? '#fff' : 'var(--text-secondary)'
-              }}
-            >
-              1 Month
-            </button>
+          {/* Timeframes Ribbon */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', background: 'rgba(255,255,255,0.03)', padding: '0.15rem', borderRadius: '8px', border: '1px solid var(--border)', gap: '1px' }}>
+            {TIMEFRAMES.map(tf => {
+              const isSelected = selectedTimeframe.label === tf.label;
+              return (
+                <button
+                  key={tf.label}
+                  onClick={() => setSelectedTimeframe(tf)}
+                  style={{
+                    padding: '0.25rem 0.45rem',
+                    borderRadius: '6px',
+                    border: 'none',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    background: isSelected ? 'var(--accent)' : 'transparent',
+                    color: isSelected ? '#fff' : 'var(--text-muted)',
+                    transition: 'all var(--transition-fast)'
+                  }}
+                >
+                  {tf.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
+        {/* SMA Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', cursor: 'pointer', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
             <input
               type="checkbox"
               checked={showSMA}
@@ -255,8 +307,33 @@ const StockChart = ({ ticker }) => {
         </div>
       </div>
 
-      {/* Drawing Board */}
-      <div style={{ position: 'relative', flex: 1, minHeight: '230px' }}>
+      {/* Dynamic Hover Quote Overlay */}
+      <div style={{
+        minHeight: '26px',
+        display: 'flex',
+        gap: '1rem',
+        fontSize: '0.75rem',
+        color: 'var(--text-secondary)',
+        background: 'rgba(255, 255, 255, 0.01)',
+        padding: '0.25rem 0.5rem',
+        borderRadius: '6px',
+        border: '1px solid var(--border)'
+      }}>
+        {activeHoverData ? (
+          <>
+            <span>Time: <strong style={{ color: '#fff' }}>{activeHoverData.time}</strong></span>
+            <span>Open: <strong style={{ color: '#fff' }}>₹{activeHoverData.open.toFixed(2)}</strong></span>
+            <span>High: <strong style={{ color: 'var(--success)' }}>₹{activeHoverData.high.toFixed(2)}</strong></span>
+            <span>Low: <strong style={{ color: 'var(--danger)' }}>₹{activeHoverData.low.toFixed(2)}</strong></span>
+            <span>Close: <strong style={{ color: '#fff' }}>₹{activeHoverData.close.toFixed(2)}</strong></span>
+          </>
+        ) : (
+          <span style={{ color: 'var(--text-muted)' }}>Hover over candles to view tick values</span>
+        )}
+      </div>
+
+      {/* SVG Canvas Board */}
+      <div style={{ position: 'relative', flex: 1, minHeight: '240px' }}>
         <svg
           width="100%"
           height="100%"
@@ -266,7 +343,7 @@ const StockChart = ({ ticker }) => {
           onMouseLeave={handleMouseLeave}
           style={{ overflow: 'visible', userSelect: 'none' }}
         >
-          {/* Grid lines and Y ticks */}
+          {/* Grid lines and Y prices */}
           {gridLines.map((val, idx) => {
             const y = getY(val);
             return (
@@ -285,8 +362,8 @@ const StockChart = ({ ticker }) => {
                   y={y + 3}
                   fill="var(--text-muted)"
                   fontSize="8.5"
-                  fontFamily="Inter"
-                  fontWeight="500"
+                  fontFamily="monospace"
+                  fontWeight="600"
                 >
                   ₹{val.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
                 </text>
@@ -298,158 +375,256 @@ const StockChart = ({ ticker }) => {
           {chartType === 'line' && (
             <>
               <defs>
-                <linearGradient id="chart-area-grad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="var(--primary)" stopOpacity="0.00" />
+                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.00" />
                 </linearGradient>
               </defs>
-              <path d={areaPath} fill="url(#chart-area-grad)" />
+              <path
+                d={areaPath}
+                fill="url(#areaGrad)"
+                stroke="none"
+              />
               <path
                 d={linePath}
                 fill="none"
-                stroke="var(--primary)"
-                strokeWidth="2"
+                stroke="var(--accent)"
+                strokeWidth="2.2"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               />
             </>
           )}
 
-          {/* Candle view */}
-          {chartType === 'candlestick' && 
-            data.map((d, idx) => {
-              const isBullish = d.close >= d.open;
-              const color = isBullish ? 'var(--success)' : 'var(--danger)';
-              const x = getX(idx);
-              const openY = getY(d.open);
-              const closeY = getY(d.close);
-              const highY = getY(d.high);
-              const lowY = getY(d.low);
-              
-              const candleWidth = Math.max(3, chartWidth / data.length * 0.65);
-              const candleHeight = Math.max(1, Math.abs(closeY - openY));
-              const candleY = Math.min(openY, closeY);
+          {/* Candlestick view */}
+          {chartType === 'candlestick' && (
+            <g>
+              {visibleData.map((d, idx) => {
+                const x = getX(idx);
+                const yOpen = getY(d.open);
+                const yClose = getY(d.close);
+                const yHigh = getY(d.high);
+                const yLow = getY(d.low);
 
-              return (
-                <g key={idx}>
-                  <line
-                    x1={x}
-                    y1={highY}
-                    x2={x}
-                    y2={lowY}
-                    stroke={color}
-                    strokeWidth="1.2"
-                  />
-                  <rect
-                    x={x - candleWidth / 2}
-                    y={candleY}
-                    width={candleWidth}
-                    height={candleHeight}
-                    fill={color}
-                    rx="1"
-                  />
-                </g>
-              );
-            })
-          }
+                const isBullish = d.close >= d.open;
+                const strokeColor = isBullish ? 'var(--success)' : 'var(--danger)';
+                const fillColor = isBullish ? 'var(--success)' : 'var(--danger)';
+
+                // Width of candle based on density
+                const candleWidth = Math.max(1.5, (chartWidth / visibleData.length) * 0.65);
+
+                return (
+                  <g key={idx}>
+                    {/* Wick line */}
+                    <line
+                      x1={x}
+                      y1={yHigh}
+                      x2={x}
+                      y2={yLow}
+                      stroke={strokeColor}
+                      strokeWidth="1.2"
+                    />
+                    {/* Body rect */}
+                    <rect
+                      x={x - candleWidth / 2}
+                      y={Math.min(yOpen, yClose)}
+                      width={candleWidth}
+                      height={Math.max(1.2, Math.abs(yOpen - yClose))}
+                      fill={fillColor}
+                      stroke={strokeColor}
+                      strokeWidth="0.5"
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          )}
 
           {/* SMA line overlay */}
           {showSMA && smaPath && (
             <path
               d={smaPath}
               fill="none"
-              stroke="var(--accent)"
+              stroke="#fbbf24"
               strokeWidth="1.5"
-              strokeDasharray="1"
+              strokeDasharray="2 1"
             />
           )}
 
-          {/* Crosshair indicator */}
+          {/* Vertical cursor tracking line on hover */}
           {hoverIndex !== null && (
             <g>
               <line
                 x1={getX(hoverIndex)}
                 y1={paddingTop}
                 x2={getX(hoverIndex)}
-                y2={height - paddingBottom}
-                stroke="var(--primary)"
+                y2={paddingTop + chartHeight}
+                stroke="rgba(255, 255, 255, 0.18)"
                 strokeWidth="1"
-                strokeDasharray="3 3"
+                strokeDasharray="2 2"
               />
               <circle
                 cx={getX(hoverIndex)}
-                cy={getY(data[hoverIndex].close)}
+                cy={getY(visibleData[hoverIndex].close)}
                 r="4.5"
-                fill="var(--primary)"
+                fill="var(--accent)"
                 stroke="#fff"
                 strokeWidth="1.5"
               />
             </g>
           )}
-
-          {/* X ticks */}
-          {data.map((d, idx) => {
-            const step = Math.ceil(data.length / 5);
-            if (idx % step === 0 || idx === data.length - 1) {
-              return (
-                <text
-                  key={idx}
-                  x={getX(idx)}
-                  y={height - paddingBottom + 16}
-                  textAnchor="middle"
-                  fill="var(--text-muted)"
-                  fontSize="8.5"
-                  fontFamily="Inter"
-                >
-                  {d.time}
-                </text>
-              );
-            }
-            return null;
-          })}
         </svg>
 
-        {/* Floating Tooltip */}
-        {activeHoverData && (
-          <div style={{
-            position: 'absolute',
-            top: '8px',
-            left: '8px',
-            background: 'var(--bg-card)',
-            border: '1px solid var(--border)',
-            borderRadius: '8px',
-            padding: '0.5rem 0.75rem',
-            boxShadow: 'var(--shadow-md)',
-            display: 'flex',
-            gap: '0.75rem',
-            pointerEvents: 'none',
-            zIndex: 10,
+        {/* X axis labels (Time) */}
+        <div style={{
+          position: 'absolute',
+          bottom: '0',
+          left: `${paddingLeft}px`,
+          width: `${chartWidth}px`,
+          height: `${paddingBottom}px`,
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: '8px',
+          color: 'var(--text-muted)',
+          paddingTop: '6px',
+          pointerEvents: 'none',
+          fontFamily: 'monospace'
+        }}>
+          <span>{visibleData[0]?.time}</span>
+          <span>{visibleData[Math.floor(visibleData.length / 2)]?.time}</span>
+          <span>{visibleData[visibleData.length - 1]?.time}</span>
+        </div>
+      </div>
+
+      {/* Axis zoom controls panel */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '0.85rem',
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid var(--border)',
+        borderRadius: '8px',
+        padding: '0.5rem 0.75rem'
+      }}>
+        
+        {/* Horizontal Zoom (X axis span) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Horizontal Zoom:</span>
+          <button
+            onClick={() => setZoomX(prev => Math.min(prev + 10, data.length))}
+            style={{
+              padding: '0.2rem 0.4rem',
+              borderRadius: '4px',
+              border: '1px solid var(--border)',
+              background: 'rgba(255,255,255,0.02)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Zoom Out (Show More Candles)"
+          >
+            <ZoomOut size={12} />
+          </button>
+          <input
+            type="range"
+            min={10}
+            max={data.length}
+            value={zoomX}
+            onChange={(e) => setZoomX(parseInt(e.target.value))}
+            style={{ width: '80px', accentColor: 'var(--accent)', cursor: 'pointer', height: '4px' }}
+          />
+          <button
+            onClick={() => setZoomX(prev => Math.max(prev - 10, 10))}
+            style={{
+              padding: '0.2rem 0.4rem',
+              borderRadius: '4px',
+              border: '1px solid var(--border)',
+              background: 'rgba(255,255,255,0.02)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Zoom In (Show Fewer Candles)"
+          >
+            <ZoomIn size={12} />
+          </button>
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{zoomX} Candles</span>
+        </div>
+
+        {/* Vertical Zoom (Y axis height scale) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Vertical Zoom:</span>
+          <button
+            onClick={() => setZoomY(prev => Math.min(prev + 0.15, 2.5))}
+            style={{
+              padding: '0.2rem 0.4rem',
+              borderRadius: '4px',
+              border: '1px solid var(--border)',
+              background: 'rgba(255,255,255,0.02)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Zoom Out (Flatten Prices)"
+          >
+            <ZoomOut size={12} />
+          </button>
+          <input
+            type="range"
+            min={0.3}
+            max={2.5}
+            step={0.1}
+            value={zoomY}
+            onChange={(e) => setZoomY(parseFloat(e.target.value))}
+            style={{ width: '80px', accentColor: 'var(--accent)', cursor: 'pointer', height: '4px' }}
+          />
+          <button
+            onClick={() => setZoomY(prev => Math.max(prev - 0.15, 0.3))}
+            style={{
+              padding: '0.2rem 0.4rem',
+              borderRadius: '4px',
+              border: '1px solid var(--border)',
+              background: 'rgba(255,255,255,0.02)',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center'
+            }}
+            title="Zoom In (Stretch Prices)"
+          >
+            <ZoomIn size={12} />
+          </button>
+          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontFamily: 'monospace' }}>{Math.round(100 / zoomY)}% Scale</span>
+        </div>
+
+        {/* Reset Zoom Button */}
+        <button
+          onClick={resetZoom}
+          style={{
+            padding: '0.25rem 0.65rem',
+            borderRadius: '6px',
+            background: 'var(--primary-glow)',
+            border: '1px solid rgba(99, 102, 241, 0.2)',
+            color: 'var(--primary)',
             fontSize: '0.7rem',
-            fontFamily: 'Inter',
-            backdropFilter: 'blur(4px)'
-          }}>
-            <div>
-              <p style={{ color: 'var(--text-muted)' }}>Date/Time</p>
-              <p style={{ fontWeight: 700 }}>{activeHoverData.time}</p>
-            </div>
-            <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '0.50rem' }}>
-              <p style={{ color: 'var(--text-muted)' }}>Open</p>
-              <p style={{ fontWeight: 700 }}>₹{activeHoverData.open}</p>
-            </div>
-            <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '0.50rem' }}>
-              <p style={{ color: 'var(--text-muted)' }}>High</p>
-              <p style={{ fontWeight: 700, color: 'var(--success)' }}>₹{activeHoverData.high}</p>
-            </div>
-            <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '0.50rem' }}>
-              <p style={{ color: 'var(--text-muted)' }}>Low</p>
-              <p style={{ fontWeight: 700, color: 'var(--danger)' }}>₹{activeHoverData.low}</p>
-            </div>
-            <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '0.50rem' }}>
-              <p style={{ color: 'var(--text-muted)' }}>Close</p>
-              <p style={{ fontWeight: 700 }}>₹{activeHoverData.close}</p>
-            </div>
-          </div>
-        )}
+            fontWeight: 700,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.25rem',
+            transition: 'all var(--transition-fast)'
+          }}
+          className="glass-card-interactive"
+        >
+          <RotateCcw size={12} />
+          100% (Reset)
+        </button>
+
       </div>
 
     </div>
