@@ -3,13 +3,14 @@ import { useMarket } from '../context/MarketContext';
 import { 
   TrendingUp, 
   TrendingDown, 
-  DollarSign, 
   BookOpen, 
   ArrowRight, 
   Clock,
   Search,
   RefreshCw,
-  AlertCircle
+  AlertCircle,
+  Briefcase,
+  DollarSign
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -26,45 +27,44 @@ const Dashboard = () => {
     addStockToWatchlist,
     isApiLoading,
     apiErrorMsg,
-    syncStocksListWithAPI
+    syncStocksListWithAPI,
+    nifty,
+    bankNifty
   } = useMarket();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Financial calculations
   const portfolioValue = getPortfolioValue();
   const netWorth = getNetWorth();
+
+  let totalCostBasis = 0;
+  Object.keys(portfolio).forEach(ticker => {
+    const hold = portfolio[ticker];
+    totalCostBasis += hold.avgPrice * hold.quantity;
+  });
+
+  const totalPL = portfolioValue - totalCostBasis;
+  const totalPLPercent = totalCostBasis === 0 ? 0 : parseFloat(((totalPL / totalCostBasis) * 100).toFixed(2));
 
   // Find next uncompleted lesson
   const nextLesson = lessons.find(l => !l.completed) || lessons[lessons.length - 1];
 
-  // Daily performance calculation
-  let dailyGainLoss = 0;
-  let portfolioPrevValue = 0;
-
-  Object.keys(portfolio).forEach(ticker => {
-    const stock = stocks.find(s => s.ticker === ticker);
-    const hold = portfolio[ticker];
-    if (stock) {
-      dailyGainLoss += (stock.price - stock.prevClose) * hold.quantity;
-      portfolioPrevValue += stock.prevClose * hold.quantity;
-    }
-  });
-
-  const dailyGainLossPercent = portfolioPrevValue === 0 ? 0 : parseFloat(((dailyGainLoss / portfolioPrevValue) * 100).toFixed(2));
-
-  // Sort watchlist by gain percent
-  const sortedStocks = [...stocks].map(s => {
-    const change = parseFloat((s.price - s.prevClose).toFixed(2));
-    const pct = parseFloat(((change / s.prevClose) * 100).toFixed(2));
-    return { ...s, change, pct };
-  }).sort((a, b) => b.pct - a.pct);
+  // Daily watchlist movers calculation
+  const sortedStocks = [...stocks]
+    .filter(s => s.ticker !== '^NSEI' && s.ticker !== '^NSEBANK') // Filter out indices from stock watch list
+    .map(s => {
+      const change = parseFloat((s.price - s.prevClose).toFixed(2));
+      const pct = parseFloat(((change / s.prevClose) * 100).toFixed(2));
+      return { ...s, change, pct };
+    }).sort((a, b) => b.pct - a.pct);
 
   const topGainer = sortedStocks[0];
   const topLoser = sortedStocks[sortedStocks.length - 1];
 
-  // Autocomplete search handler
+  // Autocomplete search suggestions
   useEffect(() => {
     const delayDebounceFn = setTimeout(async () => {
       if (searchQuery.trim().length >= 2) {
@@ -75,7 +75,7 @@ const Dashboard = () => {
       } else {
         setSearchResults([]);
       }
-    }, 400);
+    }, 300);
 
     return () => clearTimeout(delayDebounceFn);
   }, [searchQuery]);
@@ -89,14 +89,122 @@ const Dashboard = () => {
     }
   };
 
+  // Handle Search Form Submission (pressing Enter)
+  const handleSearchSubmit = async (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    let ticker = searchQuery.toUpperCase().trim();
+
+    // Try to parse suffix (default to .NS for Indian stocks if no suffix present)
+    if (!ticker.endsWith('.NS') && !ticker.endsWith('.BO') && !ticker.startsWith('^')) {
+      ticker = `${ticker}.NS`;
+    }
+
+    // Try adding directly
+    const success = await addStockToWatchlist(ticker);
+    setIsSearching(false);
+
+    if (success) {
+      setSearchQuery('');
+      setSearchResults([]);
+      setActiveTab('simulator');
+    } else {
+      // If direct add fails, check if we have any search suggestions, choose the first one
+      if (searchResults.length > 0) {
+        const firstTicker = searchResults[0].ticker;
+        const successFirst = await addStockToWatchlist(firstTicker);
+        if (successFirst) {
+          setSearchQuery('');
+          setSearchResults([]);
+          setActiveTab('simulator');
+        }
+      } else {
+        // Run a fresh lookup to be absolutely sure
+        const results = await searchRealTimeStock(searchQuery);
+        if (results.length > 0) {
+          const firstTicker = results[0].ticker;
+          const successFirst = await addStockToWatchlist(firstTicker);
+          if (successFirst) {
+            setSearchQuery('');
+            setSearchResults([]);
+            setActiveTab('simulator');
+          }
+        }
+      }
+    }
+  };
+
   return (
     <div className="fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       
+      {/* Index Ticker Banner Row */}
+      <div style={{
+        display: 'flex',
+        gap: '1.5rem',
+        overflowX: 'auto',
+        paddingBottom: '0.2rem',
+        borderBottom: '1px solid var(--border)'
+      }}>
+        {/* NIFTY 50 Index Card */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          background: 'rgba(255, 255, 255, 0.02)',
+          border: '1px solid var(--border)',
+          borderRadius: '8px',
+          padding: '0.4rem 0.8rem',
+          minWidth: '220px',
+          flexShrink: 0
+        }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>NIFTY 50</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 800 }}>₹{nifty.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span style={{
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            color: nifty.pct >= 0 ? 'var(--success)' : 'var(--danger)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.15rem'
+          }}>
+            {nifty.pct >= 0 ? '▲' : '▼'} {nifty.pct >= 0 ? `+${nifty.pct}%` : `${nifty.pct}%`}
+          </span>
+        </div>
+
+        {/* BANK NIFTY Index Card */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+          background: 'rgba(255, 255, 255, 0.02)',
+          border: '1px solid var(--border)',
+          borderRadius: '8px',
+          padding: '0.4rem 0.8rem',
+          minWidth: '220px',
+          flexShrink: 0
+        }}>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>NIFTY BANK</span>
+          <span style={{ fontSize: '0.85rem', fontWeight: 800 }}>₹{bankNifty.price.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+          <span style={{
+            fontSize: '0.75rem',
+            fontWeight: 700,
+            color: bankNifty.pct >= 0 ? 'var(--success)' : 'var(--danger)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.15rem'
+          }}>
+            {bankNifty.pct >= 0 ? '▲' : '▼'} {bankNifty.pct >= 0 ? `+${bankNifty.pct}%` : `${bankNifty.pct}%`}
+          </span>
+        </div>
+      </div>
+
       {/* Header bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>Indian Stock Market</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Real-time paper trading and financial classroom. Trade actual NSE/BSE equities.</p>
+          <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>Trading Desk</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Real-time paper trading room. Search Nifty equities and simulate trades.</p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <button 
@@ -104,9 +212,9 @@ const Dashboard = () => {
             disabled={isApiLoading}
             className="btn btn-secondary"
             style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            title="Refresh Live Data"
+            title="Refresh Live Market Data"
           >
-            <RefreshCw size={14} className={isApiLoading ? 'spin-animation' : ''} style={{ transition: 'transform 0.5s ease' }} />
+            <RefreshCw size={14} className={isApiLoading ? 'spin-animation' : ''} />
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.02)', padding: '0.5rem 1rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
             <Clock size={16} color="var(--accent)" />
@@ -134,9 +242,9 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* Live search box */}
-      <div className="glass-card" style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1.25rem' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Quote Search & Lookup</h3>
+      {/* Live search box with Form wrapping */}
+      <form onSubmit={handleSearchSubmit} className="glass-card" style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1.25rem' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Search NSE Securities & Open Charts</h3>
         <div style={{ position: 'relative', width: '100%' }}>
           <div style={{
             position: 'absolute',
@@ -151,7 +259,7 @@ const Dashboard = () => {
           </div>
           <input
             type="text"
-            placeholder="Search company name or symbol (e.g. Tata Motors, RELIANCE, TCS, SBIN)..."
+            placeholder="Search company name or symbol (e.g. Reliance, Tata Motors, TCS, SBIN) and press Enter..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={{
@@ -218,57 +326,73 @@ const Dashboard = () => {
         {isSearching && (
           <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Searching ticker database...</p>
         )}
-      </div>
+      </form>
 
-      {/* Financial performance metrics */}
-      <div className="grid-3">
-        {/* Net Worth */}
+      {/* Trading App Portfolio Row */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '1.5rem'
+      }}>
+        {/* Available Margin (Cash) */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Net Worth (Cash + Equity)</span>
-            <div style={{ background: 'var(--primary-glow)', color: 'var(--primary)', padding: '0.4rem', borderRadius: '8px' }}>
-              <span style={{ fontWeight: 700 }}>₹</span>
-            </div>
-          </div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 700 }}>₹{netWorth.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}>
-            {dailyGainLoss >= 0 ? (
-              <>
-                <TrendingUp size={14} className="stat-up" />
-                <span className="stat-up" style={{ fontWeight: 600 }}>+₹{dailyGainLoss.toFixed(2)} ({dailyGainLossPercent}%)</span>
-              </>
-            ) : (
-              <>
-                <TrendingDown size={14} className="stat-down" />
-                <span className="stat-down" style={{ fontWeight: 600 }}>-₹{Math.abs(dailyGainLoss).toFixed(2)} ({dailyGainLossPercent}%)</span>
-              </>
-            )}
-            <span style={{ color: 'var(--text-muted)' }}>today</span>
-          </div>
-        </div>
-
-        {/* Portfolio Value */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Securities Value</span>
-            <div style={{ background: 'rgba(6, 182, 212, 0.1)', color: 'var(--accent)', padding: '0.4rem', borderRadius: '8px' }}>
-              <TrendingUp size={16} />
-            </div>
-          </div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 700 }}>₹{portfolioValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Current market value of assets in active holdings</p>
-        </div>
-
-        {/* Cash Balance */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Liquid Paper Cash</span>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Available Margin</span>
             <div style={{ background: 'var(--success-glow)', color: 'var(--success)', padding: '0.4rem', borderRadius: '8px' }}>
-              <span style={{ fontWeight: 700 }}>₹</span>
+              <span style={{ fontWeight: 700, fontSize: '0.75rem' }}>₹</span>
             </div>
           </div>
-          <h2 style={{ fontSize: '1.8rem', fontWeight: 700 }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Indian Rupees paper cash available for executing buy trades</p>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 700 }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Reserve buying power for placing buy orders</p>
+        </div>
+
+        {/* Current Investment (Cost Basis) */}
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Current Investment</span>
+            <div style={{ background: 'var(--primary-glow)', color: 'var(--primary)', padding: '0.4rem', borderRadius: '8px' }}>
+              <Briefcase size={14} />
+            </div>
+          </div>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 700 }}>₹{totalCostBasis.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Total cost basis (purchase value) of active shares</p>
+        </div>
+
+        {/* Current Portfolio Value */}
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Current Value</span>
+            <div style={{ background: 'rgba(6, 182, 212, 0.1)', color: 'var(--accent)', padding: '0.4rem', borderRadius: '8px' }}>
+              <TrendingUp size={14} />
+            </div>
+          </div>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 700 }}>₹{portfolioValue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Current market value of portfolio shares</p>
+        </div>
+
+        {/* Total Profit & Loss (P&L) */}
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', fontWeight: 500 }}>Total P&L</span>
+            <div style={{ 
+              background: totalPL >= 0 ? 'var(--success-glow)' : 'var(--danger-glow)', 
+              color: totalPL >= 0 ? 'var(--success)' : 'var(--danger)', 
+              padding: '0.4rem', 
+              borderRadius: '8px' 
+            }}>
+              {totalPL >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+            </div>
+          </div>
+          <h2 style={{ fontSize: '1.6rem', fontWeight: 700, color: totalPL >= 0 ? 'var(--success)' : 'var(--danger)' }}>
+            {totalPL >= 0 ? '+' : ''}₹{totalPL.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}>
+            {totalPL >= 0 ? (
+              <span className="stat-up" style={{ fontWeight: 600 }}>+{totalPLPercent}% return</span>
+            ) : (
+              <span className="stat-down" style={{ fontWeight: 600 }}>{totalPLPercent}% return</span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -442,7 +566,6 @@ const Dashboard = () => {
 
       </div>
 
-      {/* CSS Animation injection */}
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }

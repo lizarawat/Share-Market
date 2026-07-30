@@ -317,6 +317,10 @@ export const MarketProvider = ({ children }) => {
   const [isApiLoading, setIsApiLoading] = useState(false);
   const [apiErrorMsg, setApiErrorMsg] = useState(null);
 
+  // Nifty and Bank Nifty Indices states
+  const [nifty, setNifty] = useState(() => loadState('nifty', { price: 24317.15, prevClose: 24250.2, change: 66.95, pct: 0.28 }));
+  const [bankNifty, setBankNifty] = useState(() => loadState('bankNifty', { price: 51200.10, prevClose: 51300.20, change: -100.10, pct: -0.19 }));
+
   // Floating notifications
   const [appAlert, setAppAlert] = useState(null);
   const [audioNotifications, setAudioNotifications] = useState(true);
@@ -330,6 +334,8 @@ export const MarketProvider = ({ children }) => {
   useEffect(() => { saveState('badges', badges); }, [badges]);
   useEffect(() => { saveState('lessons', lessons); }, [lessons]);
   useEffect(() => { saveState('transactionHistory', transactionHistory); }, [transactionHistory]);
+  useEffect(() => { saveState('nifty', nifty); }, [nifty]);
+  useEffect(() => { saveState('bankNifty', bankNifty); }, [bankNifty]);
 
   const triggerAlert = useCallback((message, type = 'info') => {
     setAppAlert({ message, type });
@@ -505,6 +511,35 @@ export const MarketProvider = ({ children }) => {
 
       setStocks(updatedStocks);
       setPriceHistory(updatedHistory);
+
+      // Fetch index values in background
+      try {
+        const niftyRes = await fetchStockHistoryFromAPI('^NSEI', '1d');
+        if (niftyRes) {
+          const changeVal = niftyRes.price - niftyRes.prevClose;
+          const pctVal = (changeVal / niftyRes.prevClose) * 100;
+          setNifty({
+            price: niftyRes.price,
+            prevClose: niftyRes.prevClose,
+            change: parseFloat(changeVal.toFixed(2)),
+            pct: parseFloat(pctVal.toFixed(2))
+          });
+        }
+
+        const bankNiftyRes = await fetchStockHistoryFromAPI('^NSEBANK', '1d');
+        if (bankNiftyRes) {
+          const changeVal = bankNiftyRes.price - bankNiftyRes.prevClose;
+          const pctVal = (changeVal / bankNiftyRes.prevClose) * 100;
+          setBankNifty({
+            price: bankNiftyRes.price,
+            prevClose: bankNiftyRes.prevClose,
+            change: parseFloat(changeVal.toFixed(2)),
+            pct: parseFloat(pctVal.toFixed(2))
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to fetch Nifty indices", err);
+      }
     } catch (e) {
       setApiErrorMsg("Real-time API is currently rate-limited. Falling back to local market snapshots.");
       console.warn("Sync failed, rate limit or network issue.", e);
@@ -783,7 +818,9 @@ export const MarketProvider = ({ children }) => {
       fetchStockHistoryFromAPI,
       isApiLoading,
       apiErrorMsg,
-      syncStocksListWithAPI
+      syncStocksListWithAPI,
+      nifty,
+      bankNifty
     }}>
       {children}
     </MarketContext.Provider>
