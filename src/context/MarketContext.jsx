@@ -413,8 +413,8 @@ export const MarketProvider = ({ children }) => {
     }
   };
 
-  // Fetch chart history for active view
-  const fetchStockHistoryFromAPI = async (ticker, range = '1d') => {
+  // Fetch chart history for active view (wrapped in useCallback to prevent infinite render loops)
+  const fetchStockHistoryFromAPI = useCallback(async (ticker, range = '1d') => {
     const interval = range === '1d' ? '15m' : '1d';
     try {
       const response = await fetch(`/api-yahoo/v8/finance/chart/${ticker}?interval=${interval}&range=${range}`);
@@ -464,7 +464,7 @@ export const MarketProvider = ({ children }) => {
       console.error(`Error fetching history for ${ticker}`, e);
       return null;
     }
-  };
+  }, []);
 
   // Real-time News fetcher from Yahoo Finance Search
   const fetchMarketNewsFromAPI = useCallback(async (query = 'Indian Stock Market') => {

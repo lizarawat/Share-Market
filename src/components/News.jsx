@@ -12,16 +12,21 @@ import {
 } from 'lucide-react';
 
 const News = () => {
-  const { newsFeed, setActiveTab, setSelectedStockTicker } = useMarket();
+  const { newsFeed, stocks, setActiveTab, setSelectedStockTicker } = useMarket();
   const [filterTicker, setFilterTicker] = useState('ALL');
 
-  // Filter news feed
+  // Filter news feed (with robust target symbol matching)
   const filteredNews = filterTicker === 'ALL' 
     ? newsFeed 
-    : newsFeed.filter(item => item.target === filterTicker || item.target === 'ALL');
+    : newsFeed.filter(item => {
+        if (!item.target) return false;
+        const targetClean = item.target.toUpperCase();
+        const filterClean = filterTicker.replace('.NS', '').replace('.BO', '').toUpperCase();
+        return targetClean === filterClean || targetClean === 'ALL';
+      });
 
-  // Unique tickers list for filter dropdown
-  const tickersList = ['ALL', 'BTECH', 'SLRFTR', 'BIOLFE', 'APEX', 'ELMTR', 'FOODS', 'FNTCH'];
+  // Unique tickers list for filter dropdown dynamically created from watchlist
+  const tickersList = ['ALL', ...stocks.map(s => s.ticker).filter(t => t !== '^NSEI' && t !== '^NSEBANK')];
 
   const handleTradeEvent = (ticker) => {
     if (ticker && ticker !== 'ALL') {

@@ -35,6 +35,14 @@ const Dashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [time, setTime] = useState(new Date());
+
+  useEffect(() => {
+    const clock = setInterval(() => {
+      setTime(new Date());
+    }, 1000);
+    return () => clearInterval(clock);
+  }, []);
 
   // Financial calculations
   const portfolioValue = getPortfolioValue();
@@ -218,8 +226,8 @@ const Dashboard = () => {
           </button>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.02)', padding: '0.5rem 1rem', borderRadius: '10px', border: '1px solid var(--border)' }}>
             <Clock size={16} color="var(--accent)" />
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Market: </span>
-            <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>REAL TIME</span>
+            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Time: </span>
+            <span className="badge badge-success" style={{ fontSize: '0.75rem', fontFamily: 'monospace', fontWeight: 700 }}>{time.toLocaleTimeString()}</span>
           </div>
         </div>
       </div>

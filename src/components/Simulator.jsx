@@ -8,7 +8,9 @@ import {
   ShoppingCart,
   AlertCircle,
   Search,
-  Plus
+  Plus,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 const Simulator = () => {
@@ -32,6 +34,7 @@ const Simulator = () => {
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [localSearchResults, setLocalSearchResults] = useState([]);
   const [localSearching, setLocalSearching] = useState(false);
+  const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
 
   // Auto-complete suggestion fetcher
   useEffect(() => {
@@ -119,42 +122,75 @@ const Simulator = () => {
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Buy/sell Indian equities at real-time quotes, track cost basis, and master risk strategies.</p>
       </div>
 
-      {/* Main Layout Grid */}
-      <div className="grid-main-layout">
+      {/* Main Layout Grid with Collapsible Sidebar */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: isWatchlistCollapsed ? '50px 1fr' : '320px 1fr',
+        gap: '1.5rem',
+        transition: 'grid-template-columns 0.3s ease',
+        alignItems: 'start'
+      }}>
         
-        {/* Left Side: Stock List Panel with Integrated Search */}
-        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Active Securities</h3>
-          
-          <form onSubmit={handleLocalSearchSubmit} style={{ position: 'relative', width: '100%' }}>
-            <div style={{
-              position: 'absolute',
-              left: '10px',
-              top: '50%',
-              transform: 'translateY(-50%)',
-              color: 'var(--text-secondary)',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <Search size={14} />
+        {/* Collapsible Left Side WATCHLIST */}
+        {isWatchlistCollapsed ? (
+          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1rem 0.5rem', gap: '1rem', width: '50px', height: '100%', minHeight: '520px' }}>
+            <button 
+              type="button"
+              onClick={() => setIsWatchlistCollapsed(false)}
+              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '6px' }}
+              title="Expand Watchlist"
+              className="glass-card-interactive"
+            >
+              <ChevronRight size={18} />
+            </button>
+            <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.15em', marginTop: '2rem' }}>
+              SECURITIES WATCHLIST
             </div>
-            <input
-              type="text"
-              placeholder="Search & Add NSE Ticker..."
-              value={localSearchQuery}
-              onChange={(e) => setLocalSearchQuery(e.target.value)}
-              style={{
-                width: '100%',
-                background: 'rgba(255,255,255,0.02)',
-                border: '1px solid var(--border)',
-                borderRadius: '8px',
-                padding: '0.45rem 0.45rem 0.45rem 1.85rem',
-                color: '#fff',
-                outline: 'none',
-                fontSize: '0.8rem',
-                fontWeight: 500
-              }}
-            />
+          </div>
+        ) : (
+          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Active Securities</h3>
+              <button 
+                type="button"
+                onClick={() => setIsWatchlistCollapsed(true)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                title="Collapse Watchlist"
+              >
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+            
+            <form onSubmit={handleLocalSearchSubmit} style={{ position: 'relative', width: '100%' }}>
+              <div style={{
+                position: 'absolute',
+                left: '10px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center'
+              }}>
+                <Search size={14} />
+              </div>
+              <input
+                type="text"
+                placeholder="Search & Add Ticker..."
+                value={localSearchQuery}
+                onChange={(e) => setLocalSearchQuery(e.target.value)}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '8px',
+                  padding: '0.45rem 0.45rem 0.45rem 1.85rem',
+                  color: '#fff',
+                  outline: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 500
+                }}
+              />
+            </form>
 
             {/* Suggestions Overlay */}
             {localSearchResults.length > 0 && (
@@ -199,69 +235,69 @@ const Simulator = () => {
                 ))}
               </div>
             )}
-          </form>
 
-          {/* Stocks Watchlist scrollable panel */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '0.5rem',
-            maxHeight: '430px',
-            overflowY: 'auto',
-            paddingRight: '0.25rem',
-            marginTop: '0.25rem'
-          }}>
-            {stocks.map(s => {
-              const sChange = parseFloat((s.price - s.prevClose).toFixed(2));
-              const sPct = parseFloat(((sChange / s.prevClose) * 100).toFixed(2));
-              const sIsUp = sPct >= 0;
-              const isSelected = s.ticker === selectedStockTicker;
-              const isOwned = portfolio[s.ticker] !== undefined;
+            {/* Stocks Watchlist scrollable panel */}
+            <div style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '0.5rem',
+              maxHeight: '430px',
+              overflowY: 'auto',
+              paddingRight: '0.25rem',
+              marginTop: '0.25rem'
+            }}>
+              {stocks.map(s => {
+                const sChange = parseFloat((s.price - s.prevClose).toFixed(2));
+                const sPct = parseFloat(((sChange / s.prevClose) * 100).toFixed(2));
+                const sIsUp = sPct >= 0;
+                const isSelected = s.ticker === selectedStockTicker;
+                const isOwned = portfolio[s.ticker] !== undefined;
 
-              return (
-                <div
-                  key={s.ticker}
-                  onClick={() => setSelectedStockTicker(s.ticker)}
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '0.65rem 0.85rem',
-                    borderRadius: '10px',
-                    border: '1px solid',
-                    borderColor: isSelected ? 'var(--primary)' : 'var(--border)',
-                    background: isSelected ? 'var(--primary-glow)' : 'rgba(255, 255, 255, 0.01)',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                  className="glass-card-interactive"
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.85rem', color: isSelected ? '#fff' : 'var(--text-primary)' }}>{s.ticker}</span>
-                      {isOwned && <span className="badge badge-primary" style={{ fontSize: '0.55rem', padding: '0.1rem 0.25rem' }}>HOLDING</span>}
-                    </div>
-                    <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>₹{s.price.toFixed(2)}</div>
-                    <span style={{ 
-                      fontSize: '0.7rem', 
-                      fontWeight: 600, 
-                      color: sIsUp ? 'var(--success)' : 'var(--danger)',
+                return (
+                  <div
+                    key={s.ticker}
+                    onClick={() => setSelectedStockTicker(s.ticker)}
+                    style={{
                       display: 'flex',
+                      justifyContent: 'space-between',
                       alignItems: 'center',
-                      gap: '0.15rem',
-                      justifyContent: 'flex-end'
-                    }}>
-                      {sIsUp ? `+${sPct}%` : `${sPct}%`}
-                    </span>
+                      padding: '0.65rem 0.85rem',
+                      borderRadius: '10px',
+                      border: '1px solid',
+                      borderColor: isSelected ? 'var(--primary)' : 'var(--border)',
+                      background: isSelected ? 'var(--primary-glow)' : 'rgba(255, 255, 255, 0.01)',
+                      cursor: 'pointer',
+                      transition: 'all var(--transition-fast)'
+                    }}
+                    className="glass-card-interactive"
+                  >
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span style={{ fontWeight: 700, fontSize: '0.85rem', color: isSelected ? '#fff' : 'var(--text-primary)' }}>{s.ticker}</span>
+                        {isOwned && <span className="badge badge-primary" style={{ fontSize: '0.55rem', padding: '0.1rem 0.25rem' }}>HOLDING</span>}
+                      </div>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>₹{s.price.toFixed(2)}</div>
+                      <span style={{ 
+                        fontSize: '0.7rem', 
+                        fontWeight: 600, 
+                        color: sIsUp ? 'var(--success)' : 'var(--danger)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.15rem',
+                        justifyContent: 'flex-end'
+                      }}>
+                        {sIsUp ? `+${sPct}%` : `${sPct}%`}
+                      </span>
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Right Side: Active Stock Details & Trade Panel */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
