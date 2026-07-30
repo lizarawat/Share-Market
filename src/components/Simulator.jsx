@@ -57,6 +57,31 @@ const Simulator = () => {
     }
   };
 
+  const handleLocalSearchSubmit = async (e) => {
+    e.preventDefault();
+    if (!localSearchQuery.trim()) return;
+
+    let ticker = localSearchQuery.toUpperCase().trim();
+    if (!ticker.endsWith('.NS') && !ticker.endsWith('.BO') && !ticker.startsWith('^')) {
+      ticker = `${ticker}.NS`;
+    }
+
+    const success = await addStockToWatchlist(ticker);
+    if (success) {
+      setLocalSearchQuery('');
+      setLocalSearchResults([]);
+    } else {
+      if (localSearchResults.length > 0) {
+        const firstTicker = localSearchResults[0].ticker;
+        const successFirst = await addStockToWatchlist(firstTicker);
+        if (successFirst) {
+          setLocalSearchQuery('');
+          setLocalSearchResults([]);
+        }
+      }
+    }
+  };
+
   // Get active stock data
   const stock = stocks.find(s => s.ticker === selectedStockTicker) || stocks[0];
   const history = portfolio[stock.ticker] || null;
@@ -101,8 +126,7 @@ const Simulator = () => {
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem' }}>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>Active Securities</h3>
           
-          {/* Watchlist Search */}
-          <div style={{ position: 'relative', width: '100%' }}>
+          <form onSubmit={handleLocalSearchSubmit} style={{ position: 'relative', width: '100%' }}>
             <div style={{
               position: 'absolute',
               left: '10px',
@@ -175,7 +199,7 @@ const Simulator = () => {
                 ))}
               </div>
             )}
-          </div>
+          </form>
 
           {/* Stocks Watchlist scrollable panel */}
           <div style={{

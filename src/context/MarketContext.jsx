@@ -321,6 +321,16 @@ export const MarketProvider = ({ children }) => {
   const [nifty, setNifty] = useState(() => loadState('nifty', { price: 24317.15, prevClose: 24250.2, change: 66.95, pct: 0.28 }));
   const [bankNifty, setBankNifty] = useState(() => loadState('bankNifty', { price: 51200.10, prevClose: 51300.20, change: -100.10, pct: -0.19 }));
 
+  // Real-time News state
+  const [newsFeed, setNewsFeed] = useState(() => loadState('newsFeed', []));
+
+  // Refs to prevent stale closures in periodic background sync
+  const stocksRef = React.useRef(stocks);
+  const portfolioRef = React.useRef(portfolio);
+
+  useEffect(() => { stocksRef.current = stocks; }, [stocks]);
+  useEffect(() => { portfolioRef.current = portfolio; }, [portfolio]);
+
   // Floating notifications
   const [appAlert, setAppAlert] = useState(null);
   const [audioNotifications, setAudioNotifications] = useState(true);
@@ -336,6 +346,7 @@ export const MarketProvider = ({ children }) => {
   useEffect(() => { saveState('transactionHistory', transactionHistory); }, [transactionHistory]);
   useEffect(() => { saveState('nifty', nifty); }, [nifty]);
   useEffect(() => { saveState('bankNifty', bankNifty); }, [bankNifty]);
+  useEffect(() => { saveState('newsFeed', newsFeed); }, [newsFeed]);
 
   const triggerAlert = useCallback((message, type = 'info') => {
     setAppAlert({ message, type });
@@ -455,14 +466,44 @@ export const MarketProvider = ({ children }) => {
     }
   };
 
-  // Sync / refresh real-time prices for list & portfolio
+  // Real-time News fetcher from Yahoo Finance Search
+  const fetchMarketNewsFromAPI = useCallback(async (query = 'Indian Stock Market') => {
+    try {
+      const response = await fetch(`/api-yahoo/v1/finance/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      const news = data.news || [];
+      const formatted = news.map(item => {
+        const date = new Date(item.providerPublishTime * 1000);
+        const titleLower = item.title.toLowerCase();
+        let type = 'neutral';
+        if (titleLower.includes('gain') || titleLower.includes('rise') || titleLower.includes('surge') || titleLower.includes('profit') || titleLower.includes('win') || titleLower.includes('fda') || titleLower.includes('buy')) {
+          type = 'good';
+        } else if (titleLower.includes('fall') || titleLower.includes('drop') || titleLower.includes('loss') || titleLower.includes('investigate') || titleLower.includes('recall') || titleLower.includes('sell') || titleLower.includes('slump') || titleLower.includes('down') || titleLower.includes('decline')) {
+          type = 'bad';
+        }
+        return {
+          id: item.uuid,
+          headline: item.title,
+          body: item.publisher,
+          timestamp: date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          target: item.relatedTickers?.[0] || 'ALL',
+          type: type,
+          link: item.link
+        };
+      });
+      setNewsFeed(formatted);
+    } catch (e) {
+      console.warn("Failed to fetch news feed from API", e);
+    }
+  }, []);
+
+  // Sync / refresh real-time prices for list & portfolio using Refs (prevents stale closure wipes)
   const syncStocksListWithAPI = useCallback(async () => {
     setIsApiLoading(true);
     setApiErrorMsg(null);
 
-    // Make list of tickers we care about
-    const watchlistTickers = stocks.map(s => s.ticker);
-    const portfolioTickers = Object.keys(portfolio);
+    const watchlistTickers = stocksRef.current.map(s => s.ticker);
+    const portfolioTickers = Object.keys(portfolioRef.current);
     const uniqueTickers = [...new Set([...watchlistTickers, ...portfolioTickers])];
 
     if (uniqueTickers.length === 0) {
@@ -474,43 +515,45 @@ export const MarketProvider = ({ children }) => {
       const promises = uniqueTickers.map(ticker => fetchStockHistoryFromAPI(ticker, '1d'));
       const results = await Promise.all(promises);
 
-      let updatedStocks = [...stocks];
-      let updatedHistory = { ...priceHistory };
+      setStocks(prevStocks => {
+        let updatedStocks = [...prevStocks];
+        results.forEach((res, index) => {
+          const ticker = uniqueTickers[index];
+          if (res) {
+            const existingStockIdx = updatedStocks.findIndex(s => s.ticker === ticker);
+            const updatedInfo = {
+              ticker,
+              name: res.name,
+              price: parseFloat(res.price.toFixed(2)),
+              open: parseFloat(res.open.toFixed(2)),
+              high: parseFloat(res.high.toFixed(2)),
+              low: parseFloat(res.low.toFixed(2)),
+              prevClose: parseFloat(res.prevClose.toFixed(2)),
+              sector: updatedStocks[existingStockIdx]?.sector || 'Finance & Equity',
+              volatility: updatedStocks[existingStockIdx]?.volatility || 0.015,
+              desc: updatedStocks[existingStockIdx]?.desc || `Real-time public stock listed on ${res.exchange}`
+            };
 
-      results.forEach((res, index) => {
-        const ticker = uniqueTickers[index];
-        if (res) {
-          // 1. Update stock prices in state
-          const existingStockIdx = updatedStocks.findIndex(s => s.ticker === ticker);
-          
-          const updatedInfo = {
-            ticker,
-            name: res.name,
-            price: parseFloat(res.price.toFixed(2)),
-            open: parseFloat(res.open.toFixed(2)),
-            high: parseFloat(res.high.toFixed(2)),
-            low: parseFloat(res.low.toFixed(2)),
-            prevClose: parseFloat(res.prevClose.toFixed(2)),
-            sector: updatedStocks[existingStockIdx]?.sector || 'Finance & Equity',
-            volatility: updatedStocks[existingStockIdx]?.volatility || 0.015,
-            desc: updatedStocks[existingStockIdx]?.desc || `Real-time public stock listed on ${res.exchange}`
-          };
-
-          if (existingStockIdx > -1) {
-            updatedStocks[existingStockIdx] = updatedInfo;
-          } else {
-            updatedStocks.push(updatedInfo); // Add searched/imported stock to our local list
+            if (existingStockIdx > -1) {
+              updatedStocks[existingStockIdx] = updatedInfo;
+            } else {
+              updatedStocks.push(updatedInfo);
+            }
           }
-
-          // 2. Update price history (limit to 40 data points)
-          if (res.history && res.history.length > 0) {
-            updatedHistory[ticker] = res.history.slice(-40);
-          }
-        }
+        });
+        return updatedStocks;
       });
 
-      setStocks(updatedStocks);
-      setPriceHistory(updatedHistory);
+      setPriceHistory(prevHistory => {
+        let updatedHistory = { ...prevHistory };
+        results.forEach((res, index) => {
+          const ticker = uniqueTickers[index];
+          if (res && res.history && res.history.length > 0) {
+            updatedHistory[ticker] = res.history.slice(-40);
+          }
+        });
+        return updatedHistory;
+      });
 
       // Fetch index values in background
       try {
@@ -540,25 +583,28 @@ export const MarketProvider = ({ children }) => {
       } catch (err) {
         console.warn("Failed to fetch Nifty indices", err);
       }
+
+      // Also trigger a background news sync
+      fetchMarketNewsFromAPI('Nifty 50');
     } catch (e) {
       setApiErrorMsg("Real-time API is currently rate-limited. Falling back to local market snapshots.");
       console.warn("Sync failed, rate limit or network issue.", e);
     } finally {
       setIsApiLoading(false);
     }
-  }, [stocks, portfolio, priceHistory]);
+  }, [fetchStockHistoryFromAPI, fetchMarketNewsFromAPI]);
 
   // Sync on startup, and set up automatic periodic sync every 15 seconds
   useEffect(() => {
     syncStocksListWithAPI();
+    fetchMarketNewsFromAPI('Nifty 50');
 
     const interval = setInterval(() => {
-      // Sync only if tab is not focused on quiz slide to prevent CPU waste
       syncStocksListWithAPI();
     }, 15000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [syncStocksListWithAPI, fetchMarketNewsFromAPI]);
 
   // Add stock lookup & subscribe mechanism
   const addStockToWatchlist = useCallback(async (ticker) => {
@@ -820,7 +866,9 @@ export const MarketProvider = ({ children }) => {
       apiErrorMsg,
       syncStocksListWithAPI,
       nifty,
-      bankNifty
+      bankNifty,
+      newsFeed,
+      fetchMarketNewsFromAPI
     }}>
       {children}
     </MarketContext.Provider>
