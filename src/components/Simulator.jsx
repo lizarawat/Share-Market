@@ -27,11 +27,17 @@ const Simulator = () => {
     triggerAlert,
     activeCompanyDetails,
     isDetailsLoading,
-    priceHistory
+    priceHistory,
+    optionsPortfolio,
+    getOptionChain,
+    buyOption,
+    sellOption
   } = useMarket();
 
   const [tradeQuantity, setTradeQuantity] = useState('10');
   const [tradeType, setTradeType] = useState('BUY'); // BUY or SELL
+  const [optionTradingMode, setOptionTradingMode] = useState('STOCKS'); // 'STOCKS' or 'OPTIONS'
+  const [optionQuantity, setOptionQuantity] = useState('50'); // options contract quantity
   
   // Search state inside simulator
   const [localSearchQuery, setLocalSearchQuery] = useState('');
@@ -138,6 +144,15 @@ const Simulator = () => {
     } else {
       const success = sellStock(stock.ticker, qty);
       if (success) setTradeQuantity('10');
+    }
+  };
+
+  const getLiveOptionPremium = (spotPrice, strike, type) => {
+    const timeValue = spotPrice * 0.008;
+    if (type === 'CE') {
+      return parseFloat(Math.max(2.5, (spotPrice - strike) + timeValue).toFixed(2));
+    } else {
+      return parseFloat(Math.max(2.5, (strike - spotPrice) + timeValue).toFixed(2));
     }
   };
 
@@ -527,6 +542,72 @@ const Simulator = () => {
                 You do not own shares of {stock.ticker} yet.
               </p>
             )}
+
+            {/* Active Options Positions */}
+            {(() => {
+              const activeOptions = optionsPortfolio.filter(o => o.ticker === stock.ticker);
+              if (activeOptions.length === 0) return null;
+
+              return (
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.85rem', marginTop: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                  <h4 style={{ fontSize: '0.8rem', fontWeight: 700, margin: 0, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Active Option Contracts
+                  </h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {activeOptions.map(pos => {
+                      const currentPremium = getLiveOptionPremium(stock.price, pos.strike, pos.type);
+                      const posVal = currentPremium * pos.quantity;
+                      const posCost = pos.avgPremium * pos.quantity;
+                      const pnl = posVal - posCost;
+                      const pnlPct = (pnl / posCost) * 100;
+                      const isGain = pnl >= 0;
+
+                      return (
+                        <div key={pos.id} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.65rem' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>
+                              {pos.ticker.replace('.NS', '')} {pos.strike} {pos.type}
+                            </span>
+                            <span style={{ fontSize: '0.65rem', background: 'rgba(255,255,255,0.04)', padding: '0.1rem 0.35rem', borderRadius: '4px', color: 'var(--text-secondary)' }}>
+                              Qty: {pos.quantity}
+                            </span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-secondary)' }}>
+                            <span>Avg: ₹{pos.avgPremium.toFixed(2)}</span>
+                            <span>LTP: ₹{currentPremium.toFixed(2)}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed var(--border)', paddingTop: '0.35rem', marginTop: '0.2rem' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)' }}>Unrealized P&L</span>
+                              <strong className={isGain ? 'stat-up' : 'stat-down'} style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                                {isGain ? '+' : ''}₹{pnl.toFixed(2)} ({isGain ? '+' : ''}{pnlPct.toFixed(2)}%)
+                              </strong>
+                            </div>
+                            <button
+                              onClick={() => sellOption(pos.id, pos.quantity, currentPremium)}
+                              style={{
+                                background: 'rgba(244, 63, 94, 0.1)',
+                                border: '1px solid rgba(244, 63, 94, 0.25)',
+                                color: 'var(--danger)',
+                                borderRadius: '4px',
+                                padding: '0.25rem 0.5rem',
+                                fontSize: '0.65rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                transition: 'all var(--transition-fast)'
+                              }}
+                              className="glass-card-interactive"
+                            >
+                              Square Off
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
           {/* Trade Execution console */}
@@ -536,123 +617,279 @@ const Simulator = () => {
               <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Execution Desk</h3>
             </div>
 
-            {/* Order type switch */}
+            {/* Trade Mode Toggle Segment */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
               <button
-                onClick={() => setTradeType('BUY')}
+                type="button"
+                onClick={() => setOptionTradingMode('STOCKS')}
                 style={{
                   padding: '0.4rem',
                   borderRadius: '6px',
                   border: 'none',
-                  fontSize: '0.8rem',
+                  fontSize: '0.75rem',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  background: tradeType === 'BUY' ? 'var(--success)' : 'transparent',
-                  color: tradeType === 'BUY' ? '#fff' : 'var(--text-secondary)',
+                  background: optionTradingMode === 'STOCKS' ? 'var(--primary)' : 'transparent',
+                  color: optionTradingMode === 'STOCKS' ? '#fff' : 'var(--text-secondary)',
                   transition: 'background var(--transition-fast)'
                 }}
               >
-                BUY (Long)
+                📈 Stocks (Equity)
               </button>
               <button
-                onClick={() => setTradeType('SELL')}
+                type="button"
+                onClick={() => setOptionTradingMode('OPTIONS')}
                 style={{
                   padding: '0.4rem',
                   borderRadius: '6px',
                   border: 'none',
-                  fontSize: '0.8rem',
+                  fontSize: '0.75rem',
                   fontWeight: 700,
                   cursor: 'pointer',
-                  background: tradeType === 'SELL' ? 'var(--danger)' : 'transparent',
-                  color: tradeType === 'SELL' ? '#fff' : 'var(--text-secondary)',
+                  background: optionTradingMode === 'OPTIONS' ? 'var(--primary)' : 'transparent',
+                  color: optionTradingMode === 'OPTIONS' ? '#fff' : 'var(--text-secondary)',
                   transition: 'background var(--transition-fast)'
                 }}
               >
-                SELL (Short)
+                🎯 Options Chain
               </button>
             </div>
 
-            {/* Order execution inputs */}
-            <form onSubmit={handleExecuteTrade} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.25rem' }}>
-              
-              {/* Quantity input */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  <label htmlFor="quantity">Order Quantity</label>
-                  <span>Max: {tradeType === 'BUY' ? Math.floor(cash / stock.price) : (history?.quantity || 0)} shares</span>
+            {optionTradingMode === 'STOCKS' ? (
+              <>
+                {/* Order type switch */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                  <button
+                    type="button"
+                    onClick={() => setTradeType('BUY')}
+                    style={{
+                      padding: '0.4rem',
+                      borderRadius: '6px',
+                      border: 'none',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: tradeType === 'BUY' ? 'var(--success)' : 'transparent',
+                      color: tradeType === 'BUY' ? '#fff' : 'var(--text-secondary)',
+                      transition: 'background var(--transition-fast)'
+                    }}
+                  >
+                    BUY (Long)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTradeType('SELL')}
+                    style={{
+                      padding: '0.4rem',
+                      borderRadius: '6px',
+                      border: 'none',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      background: tradeType === 'SELL' ? 'var(--danger)' : 'transparent',
+                      color: tradeType === 'SELL' ? '#fff' : 'var(--text-secondary)',
+                      transition: 'background var(--transition-fast)'
+                    }}
+                  >
+                    SELL (Short)
+                  </button>
                 </div>
-                <input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  value={tradeQuantity}
-                  onChange={(e) => setTradeQuantity(e.target.value)}
-                  style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                    padding: '0.5rem 0.75rem',
-                    color: '#fff',
-                    outline: 'none',
-                    fontSize: '0.9rem',
-                    fontWeight: 600
-                  }}
-                />
+
+                {/* Order execution inputs */}
+                <form onSubmit={handleExecuteTrade} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.25rem' }}>
+                  
+                  {/* Quantity input */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      <label htmlFor="quantity">Order Quantity</label>
+                      <span>Max: {tradeType === 'BUY' ? Math.floor(cash / stock.price) : (history?.quantity || 0)} shares</span>
+                    </div>
+                    <input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      value={tradeQuantity}
+                      onChange={(e) => setTradeQuantity(e.target.value)}
+                      style={{
+                        background: 'rgba(255,255,255,0.02)',
+                        border: '1px solid var(--border)',
+                        borderRadius: '8px',
+                        padding: '0.5rem 0.75rem',
+                        color: '#fff',
+                        outline: 'none',
+                        fontSize: '0.9rem',
+                        fontWeight: 600
+                      }}
+                    />
+                  </div>
+
+                  {/* Order pricing summary details */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.65rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Price Quote</span>
+                      <strong style={{ color: '#fff' }}>₹{stock.price.toFixed(2)}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Estimated Total</span>
+                      <strong style={{ color: '#fff' }}>₹{estimatedTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Liquid Cash Balance</span>
+                      <strong style={{ color: '#fff' }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                    </div>
+                  </div>
+
+                  {/* Insufficient alerts */}
+                  {tradeType === 'BUY' && !hasSufficientCash && qty > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--danger)', fontSize: '0.7rem', padding: '0.2rem 0' }}>
+                      <AlertCircle size={12} />
+                      <span>Warning: Insufficient margin available to trade.</span>
+                    </div>
+                  )}
+
+                  {tradeType === 'SELL' && !hasSufficientShares && qty > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--danger)', fontSize: '0.7rem', padding: '0.2rem 0' }}>
+                      <AlertCircle size={12} />
+                      <span>Warning: Insufficient owned shares available to execute sell.</span>
+                    </div>
+                  )}
+
+                  {/* Trigger trade button */}
+                  <button
+                    type="submit"
+                    disabled={tradeType === 'BUY' ? !hasSufficientCash || qty <= 0 : !hasSufficientShares || qty <= 0}
+                    style={{
+                      background: tradeType === 'BUY' ? 'var(--success)' : 'var(--danger)',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0.65rem',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: 'pointer',
+                      transition: 'opacity var(--transition-fast)',
+                      opacity: (tradeType === 'BUY' ? !hasSufficientCash || qty <= 0 : !hasSufficientShares || qty <= 0) ? 0.4 : 1,
+                      marginTop: '0.25rem'
+                    }}
+                  >
+                    Execute {tradeType} Order
+                  </button>
+
+                </form>
+              </>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', paddingBottom: '0.35rem' }}>
+                  <span>Calls (CE)</span>
+                  <span>Strike Price</span>
+                  <span>Puts (PE)</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  {getOptionChain(stock.ticker).map((row, idx) => (
+                    <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1.2fr', alignItems: 'center', gap: '0.25rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.35rem' }}>
+                      
+                      {/* Call Premium & Buy button */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingRight: '0.15rem' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--success)', fontWeight: 700 }}>₹{row.callPremium}</span>
+                        <button
+                          type="button"
+                          onClick={() => buyOption(stock.ticker, row.strike, 'CE', parseInt(optionQuantity) || 50, row.callPremium)}
+                          style={{
+                            background: 'rgba(16, 185, 129, 0.1)',
+                            border: '1px solid rgba(16, 185, 129, 0.25)',
+                            color: 'var(--success)',
+                            borderRadius: '4px',
+                            padding: '0.15rem 0.35rem',
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Buy
+                        </button>
+                      </div>
+
+                      {/* Strike center column */}
+                      <div style={{ display: 'flex', justifyContent: 'center' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#fff', background: 'rgba(255,255,255,0.02)', padding: '0.1rem 0.35rem', borderRadius: '4px', border: '1px solid var(--border)' }}>
+                          {row.strike}
+                        </span>
+                      </div>
+
+                      {/* Put Premium & Buy button */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingLeft: '0.15rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => buyOption(stock.ticker, row.strike, 'PE', parseInt(optionQuantity) || 50, row.putPremium)}
+                          style={{
+                            background: 'rgba(244, 63, 94, 0.1)',
+                            border: '1px solid rgba(244, 63, 94, 0.25)',
+                            color: 'var(--danger)',
+                            borderRadius: '4px',
+                            padding: '0.15rem 0.35rem',
+                            fontSize: '0.65rem',
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Buy
+                        </button>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 700 }}>₹{row.putPremium}</span>
+                      </div>
+
+                    </div>
+                  ))}
+                </div>
+
+                {/* Option contract quantity inputs */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '0.5rem', borderTop: '1px solid var(--border)', paddingTop: '0.65rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', alignItems: 'center' }}>
+                    <label htmlFor="opt-qty">Options Contract Count</label>
+                    <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>Lot: 50 contracts</span>
+                  </div>
+                  <input
+                    id="opt-qty"
+                    type="number"
+                    min="1"
+                    value={optionQuantity}
+                    onChange={(e) => setOptionQuantity(e.target.value)}
+                    style={{
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px solid var(--border)',
+                      borderRadius: '8px',
+                      padding: '0.45rem 0.65rem',
+                      color: '#fff',
+                      outline: 'none',
+                      fontSize: '0.85rem',
+                      fontWeight: 600
+                    }}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.35rem' }}>
+                    {['50', '100', '250', '500'].map(qVal => (
+                      <button
+                        key={qVal}
+                        type="button"
+                        onClick={() => setOptionQuantity(qVal)}
+                        style={{
+                          background: optionQuantity === qVal ? 'var(--primary-glow)' : 'rgba(255,255,255,0.02)',
+                          border: '1px solid var(--border)',
+                          borderRadius: '6px',
+                          padding: '0.25rem',
+                          color: optionQuantity === qVal ? 'var(--primary)' : 'var(--text-secondary)',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {qVal}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* Order pricing summary details */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.65rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Price Quote</span>
-                  <strong style={{ color: '#fff' }}>₹{stock.price.toFixed(2)}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Estimated Total</span>
-                  <strong style={{ color: '#fff' }}>₹{estimatedTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span>Liquid Cash Balance</span>
-                  <strong style={{ color: '#fff' }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
-                </div>
-              </div>
-
-              {/* Insufficient alerts */}
-              {tradeType === 'BUY' && !hasSufficientCash && qty > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--danger)', fontSize: '0.7rem', padding: '0.2rem 0' }}>
-                  <AlertCircle size={12} />
-                  <span>Warning: Insufficient margin available to trade.</span>
-                </div>
-              )}
-
-              {tradeType === 'SELL' && !hasSufficientShares && qty > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--danger)', fontSize: '0.7rem', padding: '0.2rem 0' }}>
-                  <AlertCircle size={12} />
-                  <span>Warning: Insufficient owned shares available to execute sell.</span>
-                </div>
-              )}
-
-              {/* Trigger trade button */}
-              <button
-                type="submit"
-                disabled={tradeType === 'BUY' ? !hasSufficientCash || qty <= 0 : !hasSufficientShares || qty <= 0}
-                style={{
-                  background: tradeType === 'BUY' ? 'var(--success)' : 'var(--danger)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '0.65rem',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer',
-                  transition: 'opacity var(--transition-fast)',
-                  opacity: (tradeType === 'BUY' ? !hasSufficientCash || qty <= 0 : !hasSufficientShares || qty <= 0) ? 0.4 : 1,
-                  marginTop: '0.25rem'
-                }}
-              >
-                Execute {tradeType} Order
-              </button>
-
-            </form>
           </div>
 
         </div>

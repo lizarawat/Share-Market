@@ -361,6 +361,7 @@ export const MarketProvider = ({ children }) => {
   const [selectedStockTicker, setSelectedStockTicker] = useState('^NSEI');
   const [activeCompanyDetails, setActiveCompanyDetails] = useState(null);
   const [isDetailsLoading, setIsDetailsLoading] = useState(false);
+  const [optionsPortfolio, setOptionsPortfolio] = useState(() => loadState('optionsPortfolio', []));
   
   // Real-time API state indicators
   const [isApiLoading, setIsApiLoading] = useState(false);
@@ -399,6 +400,7 @@ export const MarketProvider = ({ children }) => {
   useEffect(() => { saveState('bankNifty', bankNifty); }, [bankNifty]);
   useEffect(() => { saveState('newsFeed', newsFeed); }, [newsFeed]);
   useEffect(() => { saveState('activeTab', activeTab); }, [activeTab]);
+  useEffect(() => { saveState('optionsPortfolio', optionsPortfolio); }, [optionsPortfolio]);
 
   const triggerAlert = useCallback((message, type = 'info') => {
     setAppAlert({ message, type });
@@ -1160,6 +1162,135 @@ export const MarketProvider = ({ children }) => {
     }
   }, [selectedStockTicker, fetchCompanyDetails]);
 
+  const getOptionChain = useCallback((ticker) => {
+    const stock = stocks.find(s => s.ticker === ticker);
+    if (!stock) return [];
+
+    const stockPrice = stock.price;
+    const isIndex = ticker.startsWith('^');
+    const strikeSpacing = isIndex ? 100 : (stockPrice > 1000 ? 50 : 20);
+    const baseStrike = Math.round(stockPrice / strikeSpacing) * strikeSpacing;
+
+    const chain = [];
+    for (let i = -2; i <= 2; i++) {
+      const strike = baseStrike + i * strikeSpacing;
+      const timeValue = stockPrice * 0.008; // Implied volatility & time decay (0.8% of spot)
+      
+      const callPremium = parseFloat(Math.max(2.5, (stockPrice - strike) + timeValue).toFixed(2));
+      const putPremium = parseFloat(Math.max(2.5, (strike - stockPrice) + timeValue).toFixed(2));
+
+      chain.push({
+        strike,
+        callPremium,
+        putPremium
+      });
+    }
+    return chain;
+  }, [stocks]);
+
+  const buyOption = useCallback((ticker, strike, type, qty, premium) => {
+    const totalCost = parseFloat((premium * qty).toFixed(2));
+    if (cash < totalCost) {
+      playSound('error');
+      triggerAlert("Insufficient cash balance to buy this option contract.", "error");
+      return false;
+    }
+
+    setCash(prev => prev - totalCost);
+    setOptionsPortfolio(prev => {
+      // Check if exact same contract already exists (same ticker, strike, type)
+      const existingIdx = prev.findIndex(p => p.ticker === ticker && p.strike === strike && p.type === type);
+      if (existingIdx !== -1) {
+        const updated = [...prev];
+        const exist = updated[existingIdx];
+        const newQty = exist.quantity + qty;
+        const newAvg = parseFloat(((exist.avgPremium * exist.quantity + premium * qty) / newQty).toFixed(2));
+        updated[existingIdx] = {
+          ...exist,
+          quantity: newQty,
+          avgPremium: newAvg
+        };
+        return updated;
+      } else {
+        const positionId = `${ticker}-${strike}-${type}-${Date.now()}`;
+        return [...prev, {
+          id: positionId,
+          ticker,
+          strike,
+          type,
+          quantity: qty,
+          buyPremium: premium,
+          avgPremium: premium,
+          timestamp: Date.now()
+        }];
+      }
+    });
+
+    setTransactionHistory(prev => [
+      {
+        id: Math.random().toString(36).substr(2, 9),
+        type: `BUY_${type}`,
+        ticker: `${ticker} ${strike} ${type}`,
+        quantity: qty,
+        price: premium,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      },
+      ...prev
+    ]);
+
+    playSound('success');
+    triggerAlert(`Successfully bought ${qty} contracts of ${ticker} ${strike} ${type}!`, "success");
+    checkAndAwardBadge("First Steps", "Completed your very first purchase.");
+    return true;
+  }, [cash, playSound, triggerAlert, checkAndAwardBadge]);
+
+  const sellOption = useCallback((positionId, qty, currentPremium) => {
+    let success = false;
+    setOptionsPortfolio(prev => {
+      const idx = prev.findIndex(p => p.id === positionId);
+      if (idx === -1) return prev;
+
+      const pos = prev[idx];
+      if (pos.quantity < qty) {
+        playSound('error');
+        triggerAlert("You do not own enough contracts to sell.", "error");
+        return prev;
+      }
+
+      const totalRevenue = parseFloat((currentPremium * qty).toFixed(2));
+      setCash(c => c + totalRevenue);
+
+      const updated = [...prev];
+      if (pos.quantity === qty) {
+        updated.splice(idx, 1);
+      } else {
+        updated[idx] = {
+          ...pos,
+          quantity: pos.quantity - qty
+        };
+      }
+
+      setTransactionHistory(tPrev => [
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          type: `SELL_${pos.type}`,
+          ticker: `${pos.ticker} ${pos.strike} ${pos.type}`,
+          quantity: qty,
+          price: currentPremium,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        },
+        ...tPrev
+      ]);
+
+      playSound('success');
+      triggerAlert(`Successfully sold ${qty} contracts of ${pos.ticker} ${pos.strike} ${pos.type}!`, "success");
+      success = true;
+      return updated;
+    });
+
+    return success;
+  }, [playSound, triggerAlert]);
+
   return (
     <MarketContext.Provider value={{
       cash,
@@ -1176,6 +1307,10 @@ export const MarketProvider = ({ children }) => {
       setSelectedStockTicker,
       activeCompanyDetails,
       isDetailsLoading,
+      optionsPortfolio,
+      getOptionChain,
+      buyOption,
+      sellOption,
       getLevelInfo,
       buyStock,
       sellStock,
