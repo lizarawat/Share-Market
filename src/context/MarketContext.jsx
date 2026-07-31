@@ -869,6 +869,13 @@ export const MarketProvider = ({ children }) => {
     triggerAlert("Logged out successfully.", "success");
   }, [triggerAlert]);
 
+  const continueAsGuest = useCallback(() => {
+    const guestUser = { username: 'Guest Trader', email: 'guest@tradecraft.com', isGuest: true };
+    setCurrentUser(guestUser);
+    triggerAlert("Logged in as Guest Trader.", "success");
+    return true;
+  }, [triggerAlert]);
+
   const getPortfolioValue = useCallback(() => {
     let holdingsVal = 0;
     Object.keys(portfolio).forEach(ticker => {
@@ -923,7 +930,8 @@ export const MarketProvider = ({ children }) => {
       currentUser,
       signUpUser,
       signInUser,
-      signOutUser
+      signOutUser,
+      continueAsGuest
     }}>
       {children}
     </MarketContext.Provider>

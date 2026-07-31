@@ -72,6 +72,11 @@ const StockChart = ({ ticker }) => {
 
   const svgRef = React.useRef(null);
 
+  // Chart drag to pan states
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartX, setDragStartX] = useState(0);
+  const [dragStartScrollOffset, setDragStartScrollOffset] = useState(0);
+
   // Reset scrollOffset on stock change
   useEffect(() => {
     setScrollOffset(0);
@@ -97,10 +102,12 @@ const StockChart = ({ ticker }) => {
       // 2. Pan (horizontal scrolling)
       else {
         const panStep = Math.max(1, Math.round(zoomX * 0.03));
+        const minOffset = -zoomX + 10;
+        const maxOffset = chartData.length - 10;
         if (e.deltaX > 0) {
-          setScrollOffset(prev => Math.max(0, prev - panStep));
+          setScrollOffset(prev => Math.max(minOffset, prev - panStep));
         } else {
-          setScrollOffset(prev => Math.min(chartData.length - zoomX, prev + panStep));
+          setScrollOffset(prev => Math.min(maxOffset, prev + panStep));
         }
       }
     };
@@ -206,21 +213,47 @@ const StockChart = ({ ticker }) => {
     );
   }
 
-  // Slice data based on zoomX (Horizontal zoom) and scrollOffset (Touchpad panning)
-  const maxScrollOffset = Math.max(0, data.length - zoomX);
-  const currentScrollOffset = Math.min(scrollOffset, maxScrollOffset);
-  const startIndex = Math.max(0, data.length - zoomX - currentScrollOffset);
-  const visibleData = data.slice(startIndex, startIndex + zoomX);
+  // Infinite Dragging Bounds (Allow dragging past boundaries for empty space)
+  const minOffset = -zoomX + 10;
+  const maxOffset = data.length - 10;
+  const currentScrollOffset = Math.max(minOffset, Math.min(scrollOffset, maxOffset));
+  const startIndex = data.length - zoomX - currentScrollOffset;
 
-  // Heikin-Ashi Transformation
+  // Build finalRenderData padding mock slots where index goes out of bounds
+  const visibleData = [];
+  for (let i = 0; i < zoomX; i++) {
+    const dataIdx = startIndex + i;
+    if (dataIdx >= 0 && dataIdx < data.length) {
+      visibleData.push({ ...data[dataIdx], isMockSlot: false });
+    } else {
+      visibleData.push({ 
+        time: '', 
+        open: null, 
+        high: null, 
+        low: null, 
+        close: null, 
+        volume: 0, 
+        isMockSlot: true 
+      });
+    }
+  }
+
+  // Heikin-Ashi Transformation (smooth candles)
   let finalRenderData = visibleData;
   if (chartType === 'heikin-ashi' && visibleData.length > 0) {
     const ha = [];
-    let prevOpen = visibleData[0].open;
-    let prevClose = visibleData[0].close;
+    // Find first non-mock slot to initialize
+    const firstValid = visibleData.find(v => !v.isMockSlot) || visibleData[0];
+    let prevOpen = firstValid.open || 0;
+    let prevClose = firstValid.close || 0;
 
     for (let i = 0; i < visibleData.length; i++) {
       const d = visibleData[i];
+      if (d.isMockSlot) {
+        ha.push(d);
+        continue;
+      }
+
       const haClose = (d.open + d.high + d.low + d.close) / 4;
       const haOpen = (prevOpen + prevClose) / 2;
       const haHigh = Math.max(d.high, haOpen, haClose);
@@ -240,6 +273,17 @@ const StockChart = ({ ticker }) => {
     finalRenderData = ha;
   }
 
+  // Dynamic X-Axis Step interval rendering based on zoom levels:
+  // zoomX > 50 -> step 30
+  // zoomX <= 50 and > 20 -> step 10
+  // zoomX <= 20 -> step 5
+  let step = 30;
+  if (zoomX <= 20) {
+    step = 5;
+  } else if (zoomX <= 50) {
+    step = 10;
+  }
+
   // Dimensions of SVG
   const width = 600;
   const height = 280;
@@ -251,13 +295,18 @@ const StockChart = ({ ticker }) => {
   const chartWidth = width - paddingLeft - paddingRight;
   const chartHeight = height - paddingTop - paddingBottom;
 
-  // Scaling limits based on finalRenderData and zoomY (Vertical zoom)
-  let allVals = [];
-  finalRenderData.forEach(d => {
-    allVals.push(d.high, d.low, d.open, d.close);
-  });
-  const maxVal = Math.max(...allVals);
-  const minVal = Math.min(...allVals);
+  // Scaling limits based on finalRenderData valid candles
+  const validTicks = finalRenderData.filter(d => !d.isMockSlot && d.open !== null);
+  let maxVal = 10;
+  let minVal = 0;
+  if (validTicks.length > 0) {
+    let allVals = [];
+    validTicks.forEach(d => {
+      allVals.push(d.high, d.low, d.open, d.close);
+    });
+    maxVal = Math.max(...allVals);
+    minVal = Math.min(...allVals);
+  }
   
   const valRange = maxVal - minVal;
   const midVal = (maxVal + minVal) / 2;
@@ -274,19 +323,25 @@ const StockChart = ({ ticker }) => {
     return paddingTop + chartHeight - ((value - yMin) / (yMax - yMin)) * chartHeight;
   };
 
-  // Line Chart path
+  // Line Chart path (ignoring empty mock slots)
   let linePath = "";
-  finalRenderData.forEach((d, idx) => {
-    const x = getX(idx);
-    const y = getY(d.close);
-    if (idx === 0) {
-      linePath += `M ${x} ${y}`;
-    } else {
-      linePath += ` L ${x} ${y}`;
-    }
-  });
+  let areaPath = "";
+  const validLinePoints = finalRenderData
+    .map((d, idx) => ({ d, idx }))
+    .filter(item => !item.d.isMockSlot && item.d.close !== null);
 
-  const areaPath = linePath ? `${linePath} L ${getX(finalRenderData.length - 1)} ${getY(yMin)} L ${getX(0)} ${getY(yMin)} Z` : "";
+  if (validLinePoints.length > 0) {
+    validLinePoints.forEach((point, i) => {
+      const x = getX(point.idx);
+      const y = getY(point.d.close);
+      if (i === 0) {
+        linePath += `M ${x} ${y}`;
+      } else {
+        linePath += ` L ${x} ${y}`;
+      }
+    });
+    areaPath = `${linePath} L ${getX(validLinePoints[validLinePoints.length - 1].idx)} ${getY(yMin)} L ${getX(validLinePoints[0].idx)} ${getY(yMin)} Z`;
+  }
 
   // SMA computation (10 period)
   let smaPath = "";
@@ -294,13 +349,22 @@ const StockChart = ({ ticker }) => {
   const smaData = [];
 
   for (let i = 0; i < finalRenderData.length; i++) {
+    const d = finalRenderData[i];
+    if (d.isMockSlot) continue;
+
     if (i >= smaPeriod - 1) {
       let sum = 0;
+      let validCount = 0;
       for (let j = 0; j < smaPeriod; j++) {
-        sum += finalRenderData[i - j].close;
+        if (!finalRenderData[i - j].isMockSlot) {
+          sum += finalRenderData[i - j].close;
+          validCount++;
+        }
       }
-      const avg = sum / smaPeriod;
-      smaData.push({ index: i, value: avg });
+      if (validCount === smaPeriod) {
+        const avg = sum / smaPeriod;
+        smaData.push({ index: i, value: avg });
+      }
     }
   }
 
@@ -314,36 +378,46 @@ const StockChart = ({ ticker }) => {
     }
   });
 
-  // Linear Regression Trendline
+  // Linear Regression Trendline (ignoring mock slots)
   let trendlinePoints = null;
-  if (showTrendline && finalRenderData.length >= 2) {
-    const N = finalRenderData.length;
-    let sumX = 0;
-    let sumY = 0;
-    let sumXY = 0;
-    let sumXX = 0;
+  if (showTrendline) {
+    const validPts = [];
+    finalRenderData.forEach((d, idx) => {
+      if (!d.isMockSlot && d.close !== null) {
+        validPts.push({ x: idx, y: d.close });
+      }
+    });
 
-    for (let i = 0; i < N; i++) {
-      const xVal = i;
-      const yVal = finalRenderData[i].close;
-      sumX += xVal;
-      sumY += yVal;
-      sumXY += xVal * yVal;
-      sumXX += xVal * xVal;
+    if (validPts.length >= 2) {
+      const N = validPts.length;
+      let sumX = 0;
+      let sumY = 0;
+      let sumXY = 0;
+      let sumXX = 0;
+
+      validPts.forEach(p => {
+        sumX += p.x;
+        sumY += p.y;
+        sumXY += p.x * p.y;
+        sumXX += p.x * p.x;
+      });
+
+      const slope = (N * sumXY - sumX * sumY) / (N * sumXX - sumX * sumX || 1);
+      const intercept = (sumY - slope * sumX) / N;
+
+      const firstIndex = validPts[0].x;
+      const lastIndex = validPts[validPts.length - 1].x;
+
+      const yStart = slope * firstIndex + intercept;
+      const yEnd = slope * lastIndex + intercept;
+
+      trendlinePoints = {
+        x1: getX(firstIndex),
+        y1: getY(yStart),
+        x2: getX(lastIndex),
+        y2: getY(yEnd)
+      };
     }
-
-    const slope = (N * sumXY - sumX * sumY) / (N * sumXX - sumX * sumX || 1);
-    const intercept = (sumY - slope * sumX) / N;
-
-    const yStart = slope * 0 + intercept;
-    const yEnd = slope * (N - 1) + intercept;
-
-    trendlinePoints = {
-      x1: getX(0),
-      y1: getY(yStart),
-      x2: getX(N - 1),
-      y2: getY(yEnd)
-    };
   }
 
   // Y-Axis division lines
@@ -353,6 +427,13 @@ const StockChart = ({ ticker }) => {
     const val = yMin + (i / gridCount) * (yMax - yMin);
     gridLines.push(val);
   }
+
+  const handleMouseDown = (e) => {
+    if (e.button !== 0) return; // left click only
+    setIsDragging(true);
+    setDragStartX(e.clientX);
+    setDragStartScrollOffset(scrollOffset);
+  };
 
   const handleMouseMove = (e) => {
     const svgRect = e.currentTarget.getBoundingClientRect();
@@ -365,13 +446,24 @@ const StockChart = ({ ticker }) => {
     if (index >= 0 && index < finalRenderData.length) {
       setHoverIndex(index);
     }
+
+    if (isDragging) {
+      const deltaX = e.clientX - dragStartX;
+      const barsMoved = Math.round((deltaX / svgRect.width) * zoomX);
+      setScrollOffset(Math.max(minOffset, Math.min(maxOffset, dragStartScrollOffset + barsMoved)));
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
   };
 
   const handleMouseLeave = () => {
     setHoverIndex(null);
+    setIsDragging(false);
   };
 
-  const activeHoverData = hoverIndex !== null ? finalRenderData[hoverIndex] : null;
+  const activeHoverData = hoverIndex !== null && !finalRenderData[hoverIndex]?.isMockSlot ? finalRenderData[hoverIndex] : null;
 
   // Maximum volume in visibleData to scale the volume profile bars
   const maxVol = Math.max(...finalRenderData.map(d => d.volume || (Math.abs(d.close - d.open) * 1000 + 500)));
@@ -518,9 +610,15 @@ const StockChart = ({ ticker }) => {
           preserveAspectRatio="none"
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
-          style={{ overflow: 'visible', userSelect: 'none', cursor: 'crosshair' }}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          style={{
+            overflow: 'visible',
+            userSelect: 'none',
+            cursor: isDragging ? 'grabbing' : (hoverIndex !== null ? 'crosshair' : 'grab')
+          }}
         >
-          {/* Grid lines and Y prices */}
+          {/* Grid lines and Y prices (Legible & High Contrast) */}
           {gridLines.map((val, idx) => {
             const y = getY(val);
             return (
@@ -530,17 +628,17 @@ const StockChart = ({ ticker }) => {
                   y1={y}
                   x2={width - paddingRight}
                   y2={y}
-                  stroke="var(--border)"
+                  stroke="rgba(255, 255, 255, 0.06)"
                   strokeWidth="0.8"
                   strokeDasharray="4 4"
                 />
                 <text
                   x={width - paddingRight + 6}
-                  y={y + 3}
-                  fill="var(--text-muted)"
-                  fontSize="8.5"
+                  y={y + 3.5}
+                  fill="#e2e8f0"
+                  fontSize="10"
                   fontFamily="monospace"
-                  fontWeight="600"
+                  fontWeight="700"
                 >
                   ₹{val.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
                 </text>
@@ -548,16 +646,35 @@ const StockChart = ({ ticker }) => {
             );
           })}
 
+          {/* Vertical grid lines (Subtle timeline lines) */}
+          {finalRenderData.map((d, idx) => {
+            if (d.isMockSlot || !d.time) return null;
+            const absoluteIndex = startIndex + idx;
+            if (absoluteIndex % step !== 0) return null;
+            const x = getX(idx);
+            return (
+              <line
+                key={`grid-x-${idx}`}
+                x1={x}
+                y1={paddingTop}
+                x2={x}
+                y2={paddingTop + chartHeight}
+                stroke="rgba(255, 255, 255, 0.03)"
+                strokeWidth="0.8"
+              />
+            );
+          })}
+
           {/* Volume Profile Bars (TradingView style at bottom) */}
           <g opacity="0.12">
             {finalRenderData.map((d, idx) => {
+              if (d.isMockSlot) return null;
               const x = getX(idx);
               const vol = d.volume || (Math.abs(d.close - d.open) * 1000 + 500);
               const volHeight = (vol / (maxVol || 1)) * (chartHeight * 0.18);
               const y = paddingTop + chartHeight - volHeight;
               const isUpCandle = d.close >= d.open;
               const fill = isUpCandle ? 'var(--success)' : 'var(--danger)';
-              // Determine candle width dynamically based on visible count
               const candleWidth = (chartWidth / finalRenderData.length) * 0.65;
               const barWidth = Math.max(1.5, candleWidth * 0.8);
               return (
@@ -574,7 +691,7 @@ const StockChart = ({ ticker }) => {
           </g>
 
           {/* Line view */}
-          {chartType === 'line' && (
+          {chartType === 'line' && linePath && (
             <>
               <defs>
                 <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
@@ -599,6 +716,7 @@ const StockChart = ({ ticker }) => {
           {(chartType === 'candlestick' || chartType === 'heikin-ashi') && (
             <g>
               {finalRenderData.map((d, idx) => {
+                if (d.isMockSlot) return null;
                 const x = getX(idx);
                 const yOpen = getY(d.open);
                 const yClose = getY(d.close);
@@ -663,7 +781,7 @@ const StockChart = ({ ticker }) => {
           )}
 
           {/* Vertical cursor tracking line on hover */}
-          {hoverIndex !== null && finalRenderData[hoverIndex] && (
+          {hoverIndex !== null && finalRenderData[hoverIndex] && !finalRenderData[hoverIndex].isMockSlot && (
             <g>
               <line
                 x1={getX(hoverIndex)}
@@ -684,27 +802,31 @@ const StockChart = ({ ticker }) => {
               />
             </g>
           )}
-        </svg>
 
-        {/* X axis labels (Time) */}
-        <div style={{
-          position: 'absolute',
-          bottom: '0',
-          left: `${paddingLeft}px`,
-          width: `${chartWidth}px`,
-          height: `${paddingBottom}px`,
-          display: 'flex',
-          justifyContent: 'space-between',
-          fontSize: '8px',
-          color: 'var(--text-muted)',
-          paddingTop: '6px',
-          pointerEvents: 'none',
-          fontFamily: 'monospace'
-        }}>
-          <span>{finalRenderData[0]?.time}</span>
-          <span>{finalRenderData[Math.floor(finalRenderData.length / 2)]?.time}</span>
-          <span>{finalRenderData[finalRenderData.length - 1]?.time}</span>
-        </div>
+          {/* X Axis Timeline Labels (Dynamic Multiples Steps - Legible & Pinned) */}
+          {finalRenderData.map((d, idx) => {
+            if (d.isMockSlot || !d.time) return null;
+            const absoluteIndex = startIndex + idx;
+            if (absoluteIndex % step !== 0) return null;
+
+            const x = getX(idx);
+            const y = paddingTop + chartHeight + 15;
+            return (
+              <text
+                key={`lbl-x-${idx}`}
+                x={x}
+                y={y}
+                fill="#cbd5e1"
+                fontSize="9.5"
+                fontFamily="monospace"
+                textAnchor="middle"
+                fontWeight="700"
+              >
+                {d.time}
+              </text>
+            );
+          })}
+        </svg>
       </div>
 
       {/* Axis zoom controls panel */}
