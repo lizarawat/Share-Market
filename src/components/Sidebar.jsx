@@ -9,7 +9,9 @@ import {
   Newspaper, 
   Volume2, 
   VolumeX, 
-  Trophy 
+  Trophy,
+  Database,
+  LogOut
 } from 'lucide-react';
 
 const Sidebar = () => {
@@ -19,7 +21,9 @@ const Sidebar = () => {
     getLevelInfo, 
     badges, 
     audioNotifications, 
-    setAudioNotifications 
+    setAudioNotifications,
+    currentUser,
+    signOutUser
   } = useMarket();
 
   const { level, rankName, xp, nextXpLimit, prevXpLimit, progressPercent } = getLevelInfo();
@@ -32,6 +36,11 @@ const Sidebar = () => {
     { id: 'quizzes', label: 'Quizzes', icon: Award },
     { id: 'news', label: 'News Room', icon: Newspaper }
   ];
+
+  // Only render Users Database option if the logged in user is admin@tradecraft.com
+  if (currentUser?.email === 'admin@tradecraft.com') {
+    navItems.push({ id: 'usersDb', label: 'Users Database', icon: Database });
+  }
 
   return (
     <aside className="sidebar">
@@ -89,7 +98,7 @@ const Sidebar = () => {
               {level}
             </div>
             <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Current Rank</p>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>Welcome, <strong style={{ color: 'var(--primary)' }}>{currentUser?.username}</strong></p>
               <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>{rankName}</h4>
             </div>
           </div>
@@ -160,6 +169,34 @@ const Sidebar = () => {
           );
         })}
       </nav>
+
+      {/* Sign Out Button */}
+      <div style={{ padding: '0.5rem 0.75rem', borderTop: '1px solid var(--border)', marginTop: 'auto' }}>
+        <button
+          onClick={signOutUser}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.85rem',
+            padding: '0.65rem 1rem',
+            borderRadius: '10px',
+            border: 'none',
+            background: 'rgba(244, 63, 94, 0.05)',
+            color: 'var(--danger)',
+            fontWeight: 600,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            textAlign: 'left',
+            width: '100%',
+            transition: 'background var(--transition-fast)'
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(244, 63, 94, 0.1)'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(244, 63, 94, 0.05)'}
+        >
+          <LogOut size={16} />
+          Sign Out
+        </button>
+      </div>
 
       {/* Footer controls & Audio Toggle */}
       <div style={{

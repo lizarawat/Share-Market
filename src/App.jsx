@@ -7,11 +7,18 @@ import Simulator from './components/Simulator';
 import Portfolio from './components/Portfolio';
 import Quiz from './components/Quiz';
 import News from './components/News';
+import UsersDb from './components/UsersDb';
+import Auth from './components/Auth';
 import { AlertCircle, CheckCircle, Info } from 'lucide-react';
 import './styles/global.css';
 
 const AppContent = () => {
-  const { activeTab, appAlert } = useMarket();
+  const { activeTab, appAlert, currentUser } = useMarket();
+
+  // If user is not authenticated, render the Auth card
+  if (!currentUser) {
+    return <Auth />;
+  }
 
   // Route renderer
   const renderTabContent = () => {
@@ -28,6 +35,12 @@ const AppContent = () => {
         return <Quiz />;
       case 'news':
         return <News />;
+      case 'usersDb':
+        // Only allow admin account to access the credentials audit page
+        if (currentUser?.email === 'admin@tradecraft.com') {
+          return <UsersDb />;
+        }
+        return <Dashboard />;
       default:
         return <Dashboard />;
     }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useMarket } from '../context/MarketContext';
 import { 
   TrendingUp, 
@@ -6,7 +6,9 @@ import {
   History, 
   ArrowUpRight, 
   ArrowDownRight,
-  PieChart
+  PieChart,
+  Briefcase,
+  X
 } from 'lucide-react';
 
 const Portfolio = () => {
@@ -18,17 +20,26 @@ const Portfolio = () => {
     getPortfolioValue, 
     getNetWorth, 
     setActiveTab,
-    setSelectedStockTicker
+    setSelectedStockTicker,
+    sellStock,
+    triggerAlert
   } = useMarket();
 
-  const portfolioValue = getPortfolioValue();
-  const netWorth = getNetWorth();
+  const portfolioValue = Number(getPortfolioValue()) || 0;
+  const netWorth = Number(getNetWorth()) || 0;
+  const cashVal = Number(cash) || 0;
+
+  // Quick Sell modal state
+  const [sellModalTicker, setSellModalTicker] = useState(null);
+  const [sellModalOwnedQty, setSellModalOwnedQty] = useState(0);
+  const [sellModalPrice, setSellModalPrice] = useState(0);
+  const [sellQuantityInput, setSellQuantityInput] = useState('10');
 
   // Calculate overall performance metrics
   let totalCostBasis = 0;
   Object.keys(portfolio).forEach(ticker => {
     const hold = portfolio[ticker];
-    totalCostBasis += hold.avgPrice * hold.quantity;
+    totalCostBasis += (Number(hold.avgPrice) || 0) * (Number(hold.quantity) || 0);
   });
 
   const totalReturn = portfolioValue - totalCostBasis;
@@ -36,13 +47,14 @@ const Portfolio = () => {
 
   // Asset allocation breakdown
   const allocation = [];
-  let totalAllocated = cash + portfolioValue;
+  let totalAllocated = cashVal + portfolioValue;
+  if (totalAllocated === 0) totalAllocated = 1; // avoid division by zero
 
-  if (cash > 0) {
+  if (cashVal > 0) {
     allocation.push({
       name: 'Liquid Cash',
-      value: cash,
-      pct: parseFloat(((cash / totalAllocated) * 100).toFixed(1)),
+      value: cashVal,
+      pct: parseFloat(((cashVal / totalAllocated) * 100).toFixed(1)),
       color: '#10b981'
     });
   }
@@ -81,6 +93,32 @@ const Portfolio = () => {
   const handleTradeClick = (ticker) => {
     setSelectedStockTicker(ticker);
     setActiveTab('simulator');
+  };
+
+  const handleOpenSellModal = (e, ticker, ownedQty, price) => {
+    e.stopPropagation(); // prevent navigation row trigger
+    setSellModalTicker(ticker);
+    setSellModalOwnedQty(ownedQty);
+    setSellModalPrice(price);
+    setSellQuantityInput(ownedQty.toString());
+  };
+
+  const handleConfirmSell = (e) => {
+    e.preventDefault();
+    const qtyToSell = parseInt(sellQuantityInput) || 0;
+    if (qtyToSell <= 0) {
+      triggerAlert("Please enter a valid quantity to sell.", "error");
+      return;
+    }
+    if (qtyToSell > sellModalOwnedQty) {
+      triggerAlert(`You only own ${sellModalOwnedQty} shares of this security.`, "error");
+      return;
+    }
+
+    const success = sellStock(sellModalTicker, qtyToSell);
+    if (success) {
+      setSellModalTicker(null);
+    }
   };
 
   return (
@@ -131,27 +169,11 @@ const Portfolio = () => {
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Asset & Sector Allocation</h3>
         </div>
 
-        {/* Allocation Bar Chart */}
-        <div style={{ display: 'flex', height: '18px', width: '100%', borderRadius: '99px', overflow: 'hidden', background: 'rgba(255,255,255,0.03)' }}>
-          {allocation.map((alloc, idx) => (
-            <div
-              key={idx}
-              style={{
-                width: `${alloc.pct}%`,
-                backgroundColor: alloc.color,
-                height: '100%',
-                transition: 'width 0.4s ease'
-              }}
-              title={`${alloc.name}: ${alloc.pct}%`}
-            />
-          ))}
-        </div>
-
         {/* Allocation Legend */}
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1.25rem', marginTop: '0.5rem' }}>
           {allocation.map((alloc, idx) => (
             <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8rem' }}>
-              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '3px', backgroundColor: alloc.color }}></span>
+              <span style={{ inlineBlock: 'true', width: '10px', height: '10px', borderRadius: '3px', backgroundColor: alloc.color }}></span>
               <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{alloc.name}</span>
               <span style={{ color: 'var(--text-secondary)' }}>({alloc.pct}%)</span>
             </div>
@@ -191,6 +213,7 @@ const Portfolio = () => {
                     <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Current</th>
                     <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Market Value</th>
                     <th style={{ padding: '0.75rem 0.5rem', textAlign: 'right' }}>Gain/Loss</th>
+                    <th style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>Action</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -199,10 +222,12 @@ const Portfolio = () => {
                     const stock = stocks.find(s => s.ticker === ticker);
                     if (!stock) return null;
 
-                    const marketValue = hold.quantity * stock.price;
-                    const costBasis = hold.quantity * hold.avgPrice;
+                    const avgPrice = Number(hold.avgPrice) || 0;
+                    const price = Number(stock.price) || 0;
+                    const marketValue = hold.quantity * price;
+                    const costBasis = hold.quantity * avgPrice;
                     const profitLoss = marketValue - costBasis;
-                    const profitLossPct = parseFloat(((profitLoss / costBasis) * 100).toFixed(2));
+                    const profitLossPct = costBasis === 0 ? 0 : parseFloat(((profitLoss / costBasis) * 100).toFixed(2));
                     const isGain = profitLoss >= 0;
 
                     return (
@@ -217,8 +242,8 @@ const Portfolio = () => {
                           <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 400 }}>{stock.name}</span>
                         </td>
                         <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>{hold.quantity}</td>
-                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right' }}>₹{hold.avgPrice.toFixed(2)}</td>
-                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>₹{stock.price.toFixed(2)}</td>
+                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right' }}>₹{avgPrice.toFixed(2)}</td>
+                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 600 }}>₹{price.toFixed(2)}</td>
                         <td style={{ padding: '0.8rem 0.5rem', textAlign: 'right', fontWeight: 700 }}>₹{marketValue.toFixed(2)}</td>
                         <td style={{ 
                           padding: '0.8rem 0.5rem', 
@@ -228,6 +253,26 @@ const Portfolio = () => {
                         }}>
                           <div>{isGain ? `+₹${profitLoss.toFixed(2)}` : `-₹${Math.abs(profitLoss).toFixed(2)}`}</div>
                           <span style={{ fontSize: '0.65rem' }}>{isGain ? `+${profitLossPct}%` : `${profitLossPct}%`}</span>
+                        </td>
+                        <td style={{ padding: '0.8rem 0.5rem', textAlign: 'center' }}>
+                          <button
+                            onClick={(e) => handleOpenSellModal(e, ticker, hold.quantity, price)}
+                            style={{
+                              padding: '0.35rem 0.65rem',
+                              background: 'rgba(244, 63, 94, 0.08)',
+                              border: '1px solid rgba(244, 63, 94, 0.2)',
+                              borderRadius: '6px',
+                              color: 'var(--danger)',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              transition: 'all var(--transition-fast)'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(244, 63, 94, 0.15)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(244, 63, 94, 0.08)'}
+                          >
+                            Sell Position
+                          </button>
                         </td>
                       </tr>
                     );
@@ -254,49 +299,44 @@ const Portfolio = () => {
             paddingRight: '0.25rem'
           }}>
             {transactionHistory.length === 0 ? (
-              <p style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.8rem' }}>No orders executed yet.</p>
+              <div style={{ padding: '2rem 1rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                No transaction logs recorded yet.
+              </div>
             ) : (
-              transactionHistory.map(log => {
-                const isBuy = log.type === 'BUY';
+              transactionHistory.slice().reverse().map((tx, idx) => {
+                const isBuy = tx.type === 'BUY';
                 return (
-                  <div
-                    key={log.id}
-                    style={{
-                      background: 'rgba(255, 255, 255, 0.01)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '10px',
-                      padding: '0.75rem 1rem',
+                  <div 
+                    key={idx} 
+                    style={{ 
+                      background: 'rgba(255,255,255,0.01)', 
+                      border: '1px solid var(--border)', 
+                      borderRadius: '8px', 
+                      padding: '0.65rem 0.8rem',
                       display: 'flex',
                       justifyContent: 'space-between',
-                      alignItems: 'center'
+                      alignItems: 'center',
+                      fontSize: '0.8rem'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div style={{
-                        background: isBuy ? 'var(--success-glow)' : 'var(--danger-glow)',
-                        color: isBuy ? 'var(--success)' : 'var(--danger)',
-                        padding: '0.35rem',
-                        borderRadius: '6px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        {isBuy ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span className={`badge ${isBuy ? 'badge-success' : 'badge-danger'}`} style={{ fontSize: '0.6rem', padding: '0.15rem 0.35rem' }}>
+                          {tx.type}
+                        </span>
+                        <strong style={{ color: '#fff' }}>{tx.ticker}</strong>
                       </div>
-                      <div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-                          {isBuy ? 'Bought' : 'Sold'} {log.quantity} {log.ticker}
-                        </div>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{log.timestamp}</span>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        {tx.quantity} shares @ ₹{tx.price.toFixed(2)}
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-                        ₹{(log.price * log.quantity).toFixed(2)}
+                      <strong style={{ color: isBuy ? 'var(--danger)' : 'var(--success)' }}>
+                        {isBuy ? `-₹` : `+₹`}{(tx.quantity * tx.price).toFixed(2)}
+                      </strong>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
+                        {tx.timestamp}
                       </div>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>
-                        @₹{log.price.toFixed(2)} / share
-                      </span>
                     </div>
                   </div>
                 );
@@ -306,6 +346,152 @@ const Portfolio = () => {
         </div>
 
       </div>
+
+      {/* Quick Sell Modal Overlay */}
+      {sellModalTicker && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(5, 5, 10, 0.75)',
+          backdropFilter: 'blur(10px)',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          zIndex: 9999,
+          padding: '1.5rem'
+        }}>
+          <div className="glass-card fade-in-up" style={{
+            maxWidth: '360px',
+            width: '100%',
+            padding: '2rem',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '1.25rem',
+            boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            position: 'relative'
+          }}>
+            {/* Close */}
+            <button
+              onClick={() => setSellModalTicker(null)}
+              style={{
+                position: 'absolute',
+                top: '15px',
+                right: '15px',
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={18} />
+            </button>
+
+            {/* Header */}
+            <div>
+              <span className="badge badge-danger">Sell Position</span>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '0.35rem 0 0.15rem' }}>{sellModalTicker}</h2>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                You currently own <strong style={{ color: '#fff' }}>{sellModalOwnedQty} shares</strong> of this security.
+              </p>
+            </div>
+
+            <form onSubmit={handleConfirmSell} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  <label htmlFor="sell-qty">Sell Quantity</label>
+                  <span 
+                    onClick={() => setSellQuantityInput(sellModalOwnedQty.toString())}
+                    style={{ color: 'var(--primary)', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    Use Max ({sellModalOwnedQty})
+                  </span>
+                </div>
+                <input
+                  id="sell-qty"
+                  type="number"
+                  min="1"
+                  max={sellModalOwnedQty}
+                  value={sellQuantityInput}
+                  onChange={(e) => setSellQuantityInput(e.target.value)}
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '0.5rem 0.75rem',
+                    color: '#fff',
+                    outline: 'none',
+                    fontSize: '0.9rem',
+                    fontWeight: 600
+                  }}
+                />
+              </div>
+
+              {/* Pricing summary */}
+              <div style={{
+                background: 'rgba(255,255,255,0.01)',
+                border: '1px solid var(--border)',
+                borderRadius: '8px',
+                padding: '0.65rem',
+                fontSize: '0.75rem',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.35rem'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Execution Price</span>
+                  <strong style={{ color: '#fff' }}>₹{sellModalPrice.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Estimated Payout</span>
+                  <strong style={{ color: 'var(--success)' }}>
+                    ₹{((parseInt(sellQuantityInput) || 0) * sellModalPrice).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.25rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setSellModalTicker(null)}
+                  style={{
+                    flex: 1,
+                    padding: '0.6rem',
+                    background: 'transparent',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    color: 'var(--text-secondary)',
+                    fontWeight: 600,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    flex: 2,
+                    padding: '0.6rem',
+                    background: 'var(--danger)',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '0.8rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Confirm Sell Order
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

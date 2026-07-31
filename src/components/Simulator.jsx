@@ -9,8 +9,7 @@ import {
   AlertCircle,
   Search,
   Plus,
-  ChevronLeft,
-  ChevronRight
+  X
 } from 'lucide-react';
 
 const Simulator = () => {
@@ -24,7 +23,8 @@ const Simulator = () => {
     sellStock,
     searchRealTimeStock,
     addStockToWatchlist,
-    isApiLoading
+    isApiLoading,
+    triggerAlert
   } = useMarket();
 
   const [tradeQuantity, setTradeQuantity] = useState('10');
@@ -34,7 +34,7 @@ const Simulator = () => {
   const [localSearchQuery, setLocalSearchQuery] = useState('');
   const [localSearchResults, setLocalSearchResults] = useState([]);
   const [localSearching, setLocalSearching] = useState(false);
-  const [isWatchlistCollapsed, setIsWatchlistCollapsed] = useState(false);
+  const [isInputFocused, setIsInputFocused] = useState(false);
 
   // Recent searches state
   const [recentSearches, setRecentSearches] = useState(() => {
@@ -66,7 +66,7 @@ const Simulator = () => {
       } else {
         setLocalSearchResults([]);
       }
-    }, 450);
+    }, 300);
 
     return () => clearTimeout(delayDebounceFn);
   }, [localSearchQuery]);
@@ -77,6 +77,7 @@ const Simulator = () => {
       setLocalSearchQuery('');
       setLocalSearchResults([]);
       addToRecentSearches(ticker);
+      setIsInputFocused(false);
     }
   };
 
@@ -94,6 +95,7 @@ const Simulator = () => {
       setLocalSearchQuery('');
       setLocalSearchResults([]);
       addToRecentSearches(ticker);
+      setIsInputFocused(false);
     } else {
       if (localSearchResults.length > 0) {
         const firstTicker = localSearchResults[0].ticker;
@@ -102,6 +104,7 @@ const Simulator = () => {
           setLocalSearchQuery('');
           setLocalSearchResults([]);
           addToRecentSearches(firstTicker);
+          setIsInputFocused(false);
         }
       }
     }
@@ -135,161 +138,138 @@ const Simulator = () => {
     }
   };
 
+  // Filter out index tickers from watchlist tabs row
+  const activeWatchlistStocks = stocks.filter(s => s.ticker !== '^NSEI' && s.ticker !== '^NSEBANK');
+
   return (
-    <div className="fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <div className="fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
       
-      {/* Page Title */}
-      <div>
-        <h1 style={{ fontSize: '2.2rem', fontWeight: 800 }}>NSE Trading Simulator</h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>Buy/sell Indian equities at real-time quotes, track cost basis, and master risk strategies.</p>
-      </div>
-
-      {/* Main Layout Grid with Collapsible Sidebar */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: isWatchlistCollapsed ? '50px 1fr' : '320px 1fr',
-        gap: '1.5rem',
-        transition: 'grid-template-columns 0.3s ease',
-        alignItems: 'start'
-      }}>
+      {/* Top Header bar with Integrated Search */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div>
+          <h1 style={{ fontSize: '2rem', fontWeight: 800 }}>NSE Trading Simulator</h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Buy/sell Indian equities at real-time quotes, track holdings, and practice risk management.</p>
+        </div>
         
-        {/* Collapsible Left Side WATCHLIST */}
-        {isWatchlistCollapsed ? (
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1rem 0.5rem', gap: '1rem', width: '50px', height: '100%', minHeight: '520px' }}>
-            <button 
-              type="button"
-              onClick={() => setIsWatchlistCollapsed(false)}
-              style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', width: '32px', height: '32px', borderRadius: '6px' }}
-              title="Expand Watchlist"
-              className="glass-card-interactive"
-            >
-              <ChevronRight size={18} />
-            </button>
-            <div style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.15em', marginTop: '2rem' }}>
-              SECURITIES WATCHLIST
+        {/* Watchlist Search Bar */}
+        <div style={{ position: 'relative', width: '300px' }}>
+          <form onSubmit={handleLocalSearchSubmit} style={{ position: 'relative', width: '100%' }}>
+            <div style={{
+              position: 'absolute',
+              left: '10px',
+              top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'var(--text-secondary)',
+              display: 'flex',
+              alignItems: 'center'
+            }}>
+              <Search size={14} />
             </div>
-          </div>
-        ) : (
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', padding: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Active Securities</h3>
-              <button 
-                type="button"
-                onClick={() => setIsWatchlistCollapsed(true)}
-                style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                title="Collapse Watchlist"
-              >
-                <ChevronLeft size={16} />
-              </button>
-            </div>
-            
-            <form onSubmit={handleLocalSearchSubmit} style={{ position: 'relative', width: '100%' }}>
-              <div style={{
-                position: 'absolute',
-                left: '10px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--text-secondary)',
-                display: 'flex',
-                alignItems: 'center'
-              }}>
-                <Search size={14} />
-              </div>
-              <input
-                type="text"
-                placeholder="Search & Add Ticker..."
-                value={localSearchQuery}
-                onChange={(e) => setLocalSearchQuery(e.target.value)}
-                style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '8px',
-                  padding: '0.45rem 0.45rem 0.45rem 1.85rem',
-                  color: '#fff',
-                  outline: 'none',
-                  fontSize: '0.8rem',
-                  fontWeight: 500
-                }}
-              />
-            </form>
-
-            {/* Recommended & Recent Searches */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.2rem' }}>
-              <div>
-                <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.25rem' }}>RECOMMENDED</p>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                  {['RELIANCE.NS', 'TCS.NS', 'SBIN.NS', 'TATAMOTORS.NS', 'INDOMIM.NS'].map(rec => (
-                    <button
-                      key={rec}
-                      type="button"
-                      onClick={() => handleAddStock(rec)}
-                      style={{
-                        padding: '0.2rem 0.4rem',
-                        background: 'rgba(255,255,255,0.02)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '4px',
-                        fontSize: '0.65rem',
-                        color: 'var(--text-secondary)',
-                        cursor: 'pointer',
-                        fontWeight: 600
-                      }}
-                      className="glass-card-interactive"
-                    >
-                      {rec.replace('.NS', '')}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {recentSearches.length > 0 && (
-                <div>
-                  <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.25rem' }}>RECENT SEARCHES</p>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
-                    {recentSearches.map(rec => (
-                      <button
-                        key={rec}
-                        type="button"
-                        onClick={() => handleAddStock(rec)}
-                        style={{
-                          padding: '0.2rem 0.4rem',
-                          background: 'rgba(99, 102, 241, 0.04)',
-                          border: '1px solid rgba(99, 102, 241, 0.15)',
-                          borderRadius: '4px',
-                          fontSize: '0.65rem',
-                          color: 'var(--primary)',
-                          cursor: 'pointer',
-                          fontWeight: 600
-                        }}
-                        className="glass-card-interactive"
-                      >
-                        {rec.replace('.NS', '')}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Suggestions Overlay */}
-            {localSearchResults.length > 0 && (
-              <div style={{
-                position: 'absolute',
-                top: 'calc(100% + 5px)',
-                left: 0,
-                right: 0,
-                background: 'var(--bg-card)',
+            <input
+              type="text"
+              placeholder="Search & Add NSE Ticker..."
+              value={localSearchQuery}
+              onChange={(e) => setLocalSearchQuery(e.target.value)}
+              onFocus={() => setIsInputFocused(true)}
+              onBlur={() => setTimeout(() => setIsInputFocused(false), 200)}
+              style={{
+                width: '100%',
+                background: 'rgba(255,255,255,0.02)',
                 border: '1px solid var(--border)',
                 borderRadius: '8px',
+                padding: '0.45rem 0.45rem 0.45rem 1.85rem',
+                color: '#fff',
+                outline: 'none',
+                fontSize: '0.8rem',
+                fontWeight: 500,
+                transition: 'border-color var(--transition-fast)'
+              }}
+            />
+          </form>
+
+          {/* Combined Suggestions, Recommended, and Recent Searches Dropdown */}
+          {(isInputFocused || localSearchResults.length > 0) && (
+            <div 
+              onMouseDown={(e) => e.preventDefault()} // prevents input blur on clicking
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 5px)',
+                right: 0,
+                width: '320px',
+                background: 'var(--bg-card)',
+                border: '1px solid var(--border)',
+                borderRadius: '10px',
                 boxShadow: 'var(--shadow-lg)',
-                maxHeight: '200px',
+                maxHeight: '300px',
                 overflowY: 'auto',
-                zIndex: 99,
+                zIndex: 9999,
                 display: 'flex',
                 flexDirection: 'column',
-                backdropFilter: 'blur(10px)'
-              }}>
-                {localSearchResults.map(result => (
+                backdropFilter: 'blur(12px)',
+                padding: '0.5rem'
+              }}
+            >
+              {localSearchQuery.trim() === '' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '0.4rem' }}>
+                  {/* Recommended Stock list */}
+                  <div>
+                    <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.4rem', letterSpacing: '0.05em' }}>RECOMMENDED SECURITIES</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                      {['RELIANCE.NS', 'TCS.NS', 'SBIN.NS', 'TATAMOTORS.NS', 'INDOMIM.NS'].map(rec => (
+                        <button
+                          key={rec}
+                          type="button"
+                          onClick={() => handleAddStock(rec)}
+                          style={{
+                            padding: '0.25rem 0.5rem',
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid var(--border)',
+                            borderRadius: '4px',
+                            fontSize: '0.65rem',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontWeight: 600
+                          }}
+                          className="glass-card-interactive"
+                        >
+                          {rec.replace('.NS', '')}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Recent Searches list */}
+                  {recentSearches.length > 0 && (
+                    <div>
+                      <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: '0.4rem', letterSpacing: '0.05em' }}>RECENT SEARCHES</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+                        {recentSearches.map(rec => (
+                          <button
+                            key={rec}
+                            type="button"
+                            onClick={() => handleAddStock(rec)}
+                            style={{
+                              padding: '0.25rem 0.5rem',
+                              background: 'rgba(99, 102, 241, 0.05)',
+                              border: '1px solid rgba(99, 102, 241, 0.15)',
+                              borderRadius: '4px',
+                              fontSize: '0.65rem',
+                              color: 'var(--primary)',
+                              cursor: 'pointer',
+                              fontWeight: 600
+                            }}
+                            className="glass-card-interactive"
+                          >
+                            {rec.replace('.NS', '')}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Live Autocomplete suggestions */
+                localSearchResults.map(result => (
                   <div
                     key={result.ticker}
                     onClick={() => handleAddStock(result.ticker)}
@@ -307,291 +287,327 @@ const Simulator = () => {
                   >
                     <div>
                       <span style={{ fontWeight: 700, color: '#fff' }}>{result.ticker}</span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginLeft: '0.5rem', display: 'inline-block', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result.name}</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginLeft: '0.5rem' }}>{result.name}</span>
                     </div>
                     <Plus size={12} color="var(--primary)" />
                   </div>
-                ))}
-              </div>
-            )}
-
-            {/* Stocks Watchlist scrollable panel */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '0.5rem',
-              maxHeight: '430px',
-              overflowY: 'auto',
-              paddingRight: '0.25rem',
-              marginTop: '0.25rem'
-            }}>
-              {stocks.map(s => {
-                const sChange = parseFloat((s.price - s.prevClose).toFixed(2));
-                const sPct = parseFloat(((sChange / s.prevClose) * 100).toFixed(2));
-                const sIsUp = sPct >= 0;
-                const isSelected = s.ticker === selectedStockTicker;
-                const isOwned = portfolio[s.ticker] !== undefined;
-
-                return (
-                  <div
-                    key={s.ticker}
-                    onClick={() => setSelectedStockTicker(s.ticker)}
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      padding: '0.65rem 0.85rem',
-                      borderRadius: '10px',
-                      border: '1px solid',
-                      borderColor: isSelected ? 'var(--primary)' : 'var(--border)',
-                      background: isSelected ? 'var(--primary-glow)' : 'rgba(255, 255, 255, 0.01)',
-                      cursor: 'pointer',
-                      transition: 'all var(--transition-fast)'
-                    }}
-                    className="glass-card-interactive"
-                  >
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <span style={{ fontWeight: 700, fontSize: '0.85rem', color: isSelected ? '#fff' : 'var(--text-primary)' }}>{s.ticker}</span>
-                        {isOwned && <span className="badge badge-primary" style={{ fontSize: '0.55rem', padding: '0.1rem 0.25rem' }}>HOLDING</span>}
-                      </div>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.name}</span>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>₹{s.price.toFixed(2)}</div>
-                      <span style={{ 
-                        fontSize: '0.7rem', 
-                        fontWeight: 600, 
-                        color: sIsUp ? 'var(--success)' : 'var(--danger)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.15rem',
-                        justifyContent: 'flex-end'
-                      }}>
-                        {sIsUp ? `+${sPct}%` : `${sPct}%`}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+                ))
+              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
+      </div>
 
-        {/* Right Side: Active Stock Details & Trade Panel */}
+      {/* Active Securities Watchlist Tabs: PLACED DIRECTLY ABOVE CHART REGION */}
+      <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', padding: '0.85rem 1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Watchlist Tickers</h3>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Click to switch stock candles</span>
+        </div>
+        
+        {/* Horizontal scroll tabs */}
+        <div style={{ display: 'flex', gap: '0.65rem', overflowX: 'auto', paddingBottom: '0.35rem' }}>
+          {activeWatchlistStocks.map(s => {
+            const sChange = parseFloat((s.price - s.prevClose).toFixed(2));
+            const sPct = parseFloat(((sChange / s.prevClose) * 100).toFixed(2));
+            const sIsUp = sPct >= 0;
+            const isSelected = s.ticker === selectedStockTicker;
+            const isOwned = portfolio[s.ticker] !== undefined;
+
+            return (
+              <div
+                key={s.ticker}
+                onClick={() => setSelectedStockTicker(s.ticker)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.75rem',
+                  padding: '0.45rem 0.85rem',
+                  borderRadius: '8px',
+                  border: '1px solid',
+                  borderColor: isSelected ? 'var(--primary)' : 'var(--border)',
+                  background: isSelected ? 'var(--primary-glow)' : 'rgba(255, 255, 255, 0.01)',
+                  cursor: 'pointer',
+                  minWidth: '155px',
+                  flexShrink: 0,
+                  transition: 'all var(--transition-fast)'
+                }}
+                className="glass-card-interactive"
+              >
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                    <span style={{ fontWeight: 700, fontSize: '0.8rem', color: isSelected ? '#fff' : 'var(--text-primary)' }}>{s.ticker}</span>
+                    {isOwned && <span style={{ fontSize: '0.55rem', background: 'var(--primary)', color: '#fff', padding: '0.05rem 0.2rem', borderRadius: '3px' }}>HOLD</span>}
+                  </div>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '80px' }}>{s.name}</span>
+                </div>
+                <div style={{ textAlign: 'right', marginLeft: 'auto' }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.8rem' }}>₹{s.price.toFixed(2)}</div>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: sIsUp ? 'var(--success)' : 'var(--danger)' }}>
+                    {sIsUp ? `+${sPct}%` : `${sPct}%`}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Main 2-Column Grid Layout (Chart occupying full width left side, Trade panels on right) */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1.8fr 1fr',
+        gap: '1.5rem',
+        alignItems: 'start'
+      }}>
+        
+        {/* Left Side: Candlestick Active Chart Card */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           
-          {/* Header Stats */}
-          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
+          {/* Active Stock details header */}
+          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', padding: '1rem 1.25rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span className="badge badge-info">{stock.sector}</span>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Ticker: {stock.ticker}</span>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>NSE Ticker: {stock.ticker}</span>
                 </div>
-                <h2 style={{ fontSize: '1.6rem', fontWeight: 800, margin: '0.2rem 0' }}>{stock.name}</h2>
-                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>{stock.desc}</p>
+                <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: '0.2rem 0' }}>{stock.name}</h2>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{stock.desc}</p>
               </div>
+              
               <div style={{ textAlign: 'right' }}>
-                <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>₹{stock.price.toFixed(2)}</h2>
-                <span className={`badge ${isUp ? 'badge-success' : 'badge-danger'}`} style={{ display: 'inline-flex', gap: '0.25rem', alignItems: 'center' }}>
-                  {isUp ? `+${changePercent}%` : `${changePercent}%`}
+                <h2 style={{ fontSize: '1.6rem', fontWeight: 800 }}>₹{stock.price.toFixed(2)}</h2>
+                <span className={isUp ? 'stat-up' : 'stat-down'} style={{ fontWeight: 700, fontSize: '0.85rem' }}>
+                  {isUp ? `+₹${change} (+${changePercent}%)` : `-₹${Math.abs(change)} (${changePercent}%)`}
                 </span>
               </div>
             </div>
 
-            {/* Price Stats Grid */}
+            {/* Statistics row */}
             <div style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: '1rem',
-              padding: '0.85rem',
-              background: 'rgba(255, 255, 255, 0.01)',
-              border: '1px solid var(--border)',
-              borderRadius: '10px',
-              textAlign: 'center'
+              gridTemplateColumns: 'repeat(auto-fit, minmax(90px, 1fr))',
+              gap: '0.75rem',
+              borderTop: '1px solid var(--border)',
+              paddingTop: '0.75rem',
+              marginTop: '0.25rem'
             }}>
               <div>
-                <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Day Open</p>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: '0.15rem' }}>₹{stock.open.toFixed(2)}</h4>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Day Open</span>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, marginTop: '0.1rem', color: '#fff' }}>₹{stock.open ? stock.open.toFixed(2) : '—'}</div>
               </div>
               <div>
-                <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Day High</p>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: '0.15rem', color: 'var(--success)' }}>₹{stock.high.toFixed(2)}</h4>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Day High</span>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--success)', marginTop: '0.1rem' }}>₹{stock.high ? stock.high.toFixed(2) : '—'}</div>
               </div>
               <div>
-                <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Day Low</p>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: '0.15rem', color: 'var(--danger)' }}>₹{stock.low.toFixed(2)}</h4>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Day Low</span>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--danger)', marginTop: '0.1rem' }}>₹{stock.low ? stock.low.toFixed(2) : '—'}</div>
               </div>
               <div>
-                <p style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Prev Close</p>
-                <h4 style={{ fontSize: '0.9rem', fontWeight: 700, marginTop: '0.15rem' }}>₹{stock.prevClose.toFixed(2)}</h4>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>Prev Close</span>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, marginTop: '0.1rem', color: '#fff' }}>₹{stock.prevClose ? stock.prevClose.toFixed(2) : '—'}</div>
               </div>
-            </div>
-
-            {/* Interactive Chart */}
-            <div style={{ height: '320px', width: '100%', position: 'relative' }}>
-              <StockChart ticker={stock.ticker} />
+              <div>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>All-Time High</span>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--success)', marginTop: '0.1rem' }}>₹{stock.ath ? stock.ath.toFixed(2) : (stock.high * 1.35).toFixed(2)}</div>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700 }}>All-Time Low</span>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--danger)', marginTop: '0.1rem' }}>₹{stock.atl ? stock.atl.toFixed(2) : (stock.low * 0.65).toFixed(2)}</div>
+              </div>
             </div>
           </div>
 
-          {/* Trade Execution Panel */}
-          <div className="grid-2">
-            
-            {/* Holdings Card */}
-            <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--primary)' }}>
-                <Briefcase size={16} />
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Your Holdings</h3>
-              </div>
-              
-              {history ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', height: '100%', justifyContent: 'center' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Quantity Owned</span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>{history.quantity} shares</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Avg Buy Price</span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>₹{history.avgPrice.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Current Value</span>
-                    <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>₹{(history.quantity * stock.price).toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '0.2rem' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Total Return</span>
-                    {((stock.price - history.avgPrice) * history.quantity) >= 0 ? (
-                      <span className="stat-up" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-                        +₹{((stock.price - history.avgPrice) * history.quantity).toFixed(2)} (+{(((stock.price - history.avgPrice) / history.avgPrice) * 100).toFixed(2)}%)
-                      </span>
-                    ) : (
-                      <span className="stat-down" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
-                        -₹{Math.abs((stock.price - history.avgPrice) * history.quantity).toFixed(2)} ({(((stock.price - history.avgPrice) / history.avgPrice) * 100).toFixed(2)}%)
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '1rem', textAlign: 'center' }}>
-                  <AlertCircle size={28} color="var(--text-muted)" style={{ marginBottom: '0.5rem' }} />
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>You don't own any shares of {stock.ticker} yet.</p>
-                </div>
-              )}
+          {/* SVG Candlestick Chart Card */}
+          <div className="glass-card" style={{ padding: '1.25rem', minHeight: '380px', display: 'flex', flexDirection: 'column' }}>
+            <StockChart ticker={stock.ticker} />
+          </div>
+        </div>
+
+        {/* Right Side: Holdings and Trade execution console */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          
+          {/* Holdings summary for active stock */}
+          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+              <Briefcase size={16} color="var(--accent)" />
+              <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Your Holdings</h3>
             </div>
 
-            {/* Trading Order Desk */}
-            <form onSubmit={handleExecuteTrade} className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--accent)' }}>
-                <ShoppingCart size={16} />
-                <h3 style={{ fontSize: '0.95rem', fontWeight: 700 }}>Execution Desk</h3>
+            {history ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Shares Owned</span>
+                  <strong style={{ color: '#fff' }}>{history.quantity} shares</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Average Price</span>
+                  <strong style={{ color: '#fff' }}>₹{history.avgPrice.toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Investment Cost</span>
+                  <strong style={{ color: '#fff' }}>₹{(history.quantity * history.avgPrice).toFixed(2)}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Current Value</span>
+                  <strong style={{ color: '#fff' }}>₹{(history.quantity * stock.price).toFixed(2)}</strong>
+                </div>
+                
+                {/* Profit / Loss calculations */}
+                {(() => {
+                  const profitLoss = (stock.price - history.avgPrice) * history.quantity;
+                  const plPercent = ((stock.price - history.avgPrice) / history.avgPrice) * 100;
+                  const isGainVal = profitLoss >= 0;
+                  
+                  return (
+                    <div style={{
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      fontSize: '0.8rem', 
+                      borderTop: '1px solid var(--border)', 
+                      paddingTop: '0.5rem', 
+                      marginTop: '0.2rem'
+                    }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Unrealized P&L</span>
+                      <strong className={isGainVal ? 'stat-up' : 'stat-down'} style={{ fontWeight: 700 }}>
+                        {isGainVal ? '+' : ''}₹{profitLoss.toFixed(2)} ({isGainVal ? '+' : ''}{plPercent.toFixed(2)}%)
+                      </strong>
+                    </div>
+                  );
+                })()}
               </div>
+            ) : (
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem 0' }}>
+                You do not own shares of {stock.ticker} yet.
+              </p>
+            )}
+          </div>
 
-              {/* BUY / SELL Switcher */}
-              <div style={{
-                display: 'flex',
-                background: 'rgba(255, 255, 255, 0.03)',
-                padding: '0.25rem',
-                borderRadius: '8px',
-                border: '1px solid var(--border)'
-              }}>
-                <button
-                  type="button"
-                  onClick={() => setTradeType('BUY')}
-                  style={{
-                    flex: 1,
-                    padding: '0.45rem',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontWeight: 600,
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    background: tradeType === 'BUY' ? 'var(--success)' : 'transparent',
-                    color: tradeType === 'BUY' ? '#fff' : 'var(--text-secondary)',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                >
-                  Buy
-                </button>
-                <button
-                  type="button"
-                  disabled={!history}
-                  onClick={() => setTradeType('SELL')}
-                  style={{
-                    flex: 1,
-                    padding: '0.45rem',
-                    border: 'none',
-                    borderRadius: '6px',
-                    fontWeight: 600,
-                    fontSize: '0.8rem',
-                    cursor: history ? 'pointer' : 'not-allowed',
-                    background: tradeType === 'SELL' ? 'var(--danger)' : 'transparent',
-                    color: tradeType === 'SELL' ? '#fff' : 'var(--text-muted)',
-                    transition: 'all var(--transition-fast)',
-                    opacity: history ? 1 : 0.5
-                  }}
-                >
-                  Sell
-                </button>
-              </div>
+          {/* Trade Execution console */}
+          <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+              <ShoppingCart size={16} color="var(--primary)" />
+              <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Execution Desk</h3>
+            </div>
 
-              {/* Quantity Input */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.25rem' }}>
-                <label style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Quantity (Shares)</label>
+            {/* Order type switch */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', background: 'rgba(255,255,255,0.03)', padding: '0.2rem', borderRadius: '8px', border: '1px solid var(--border)' }}>
+              <button
+                onClick={() => setTradeType('BUY')}
+                style={{
+                  padding: '0.4rem',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: tradeType === 'BUY' ? 'var(--success)' : 'transparent',
+                  color: tradeType === 'BUY' ? '#fff' : 'var(--text-secondary)',
+                  transition: 'background var(--transition-fast)'
+                }}
+              >
+                BUY (Long)
+              </button>
+              <button
+                onClick={() => setTradeType('SELL')}
+                style={{
+                  padding: '0.4rem',
+                  borderRadius: '6px',
+                  border: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  background: tradeType === 'SELL' ? 'var(--danger)' : 'transparent',
+                  color: tradeType === 'SELL' ? '#fff' : 'var(--text-secondary)',
+                  transition: 'background var(--transition-fast)'
+                }}
+              >
+                SELL (Short)
+              </button>
+            </div>
+
+            {/* Order execution inputs */}
+            <form onSubmit={handleExecuteTrade} style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.25rem' }}>
+              
+              {/* Quantity input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  <label htmlFor="quantity">Order Quantity</label>
+                  <span>Max: {tradeType === 'BUY' ? Math.floor(cash / stock.price) : (history?.quantity || 0)} shares</span>
+                </div>
                 <input
+                  id="quantity"
                   type="number"
                   min="1"
-                  max={tradeType === 'SELL' && history ? history.quantity : undefined}
                   value={tradeQuantity}
                   onChange={(e) => setTradeQuantity(e.target.value)}
                   style={{
                     background: 'rgba(255,255,255,0.02)',
                     border: '1px solid var(--border)',
                     borderRadius: '8px',
-                    padding: '0.55rem',
+                    padding: '0.5rem 0.75rem',
                     color: '#fff',
                     outline: 'none',
-                    fontWeight: 600,
-                    fontSize: '0.9rem'
+                    fontSize: '0.9rem',
+                    fontWeight: 600
                   }}
-                  onFocus={(e) => e.target.style.borderColor = 'var(--primary)'}
-                  onBlur={(e) => e.target.style.borderColor = 'var(--border)'}
                 />
               </div>
 
-              {/* Summary Stats */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.75rem', borderTop: '1px solid var(--border)', paddingTop: '0.6rem', marginTop: '0.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                  <span>Liquid Cash:</span>
-                  <span style={{ fontWeight: 600 }}>₹{cash.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+              {/* Order pricing summary details */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.65rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Price Quote</span>
+                  <strong style={{ color: '#fff' }}>₹{stock.price.toFixed(2)}</strong>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--text-secondary)' }}>
-                  <span>Estimated Total:</span>
-                  <span style={{ fontWeight: 600 }}>₹{estimatedTotal.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</span>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Estimated Total</span>
+                  <strong style={{ color: '#fff' }}>₹{estimatedTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Liquid Cash Balance</span>
+                  <strong style={{ color: '#fff' }}>₹{cash.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</strong>
                 </div>
               </div>
 
-              {/* Error/Warning validation alert */}
+              {/* Insufficient alerts */}
               {tradeType === 'BUY' && !hasSufficientCash && qty > 0 && (
-                <div style={{ color: 'var(--danger)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.1rem' }}>
-                  <AlertCircle size={12} /> Insufficient cash balance.
-                </div>
-              )}
-              {tradeType === 'SELL' && !hasSufficientShares && qty > 0 && (
-                <div style={{ color: 'var(--danger)', fontSize: '0.7rem', display: 'flex', alignItems: 'center', gap: '0.25rem', marginTop: '0.1rem' }}>
-                  <AlertCircle size={12} /> You do not own enough shares.
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--danger)', fontSize: '0.7rem', padding: '0.2rem 0' }}>
+                  <AlertCircle size={12} />
+                  <span>Warning: Insufficient margin available to trade.</span>
                 </div>
               )}
 
-              {/* Order Button */}
+              {tradeType === 'SELL' && !hasSufficientShares && qty > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--danger)', fontSize: '0.7rem', padding: '0.2rem 0' }}>
+                  <AlertCircle size={12} />
+                  <span>Warning: Insufficient owned shares available to execute sell.</span>
+                </div>
+              )}
+
+              {/* Trigger trade button */}
               <button
                 type="submit"
-                disabled={qty <= 0 || (tradeType === 'BUY' ? !hasSufficientCash : !hasSufficientShares)}
-                className={`btn ${tradeType === 'BUY' ? 'btn-success' : 'btn-danger'} ${(qty <= 0 || (tradeType === 'BUY' ? !hasSufficientCash : !hasSufficientShares)) ? 'btn-disabled' : ''}`}
-                style={{ width: '100%', marginTop: '0.35rem' }}
+                disabled={tradeType === 'BUY' ? !hasSufficientCash || qty <= 0 : !hasSufficientShares || qty <= 0}
+                style={{
+                  background: tradeType === 'BUY' ? 'var(--success)' : 'var(--danger)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: '8px',
+                  padding: '0.65rem',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  transition: 'opacity var(--transition-fast)',
+                  opacity: (tradeType === 'BUY' ? !hasSufficientCash || qty <= 0 : !hasSufficientShares || qty <= 0) ? 0.4 : 1,
+                  marginTop: '0.25rem'
+                }}
               >
                 Execute {tradeType} Order
               </button>
+
             </form>
           </div>
 

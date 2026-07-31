@@ -32,13 +32,13 @@ const generateHistoricalData = (startPrice, points = 30, volatility = 0.015) => 
 
 // Initial Indian Bluechip stocks watch list seeds
 const INITIAL_INDIAN_STOCKS = [
-  { ticker: 'RELIANCE.NS', name: 'Reliance Industries Ltd', price: 2450.0, open: 2445.0, high: 2465.0, low: 2435.0, prevClose: 2440.0, sector: 'Energy & Retail', volatility: 0.012, desc: 'India\'s largest private conglomerate with presence in refining, retail, and telecommunications (Jio).' },
-  { ticker: 'TCS.NS', name: 'Tata Consultancy Services', price: 3420.0, open: 3410.0, high: 3445.0, low: 3395.0, prevClose: 3405.0, sector: 'Technology', volatility: 0.01, desc: 'A leading global IT services provider and anchor company of the Tata Group.' },
-  { ticker: 'INFY.NS', name: 'Infosys Ltd', price: 1450.0, open: 1452.0, high: 1468.0, low: 1442.0, prevClose: 1455.0, sector: 'Technology', volatility: 0.015, desc: 'Pioneer of the Indian IT service model providing business consulting and technology outsourcing.' },
-  { ticker: 'HDFCBANK.NS', name: 'HDFC Bank Ltd', price: 1620.0, open: 1615.0, high: 1632.0, low: 1608.0, prevClose: 1612.0, sector: 'Finance', volatility: 0.011, desc: 'India\'s largest private sector bank by assets and market capitalization.' },
-  { ticker: 'SBIN.NS', name: 'State Bank of India', price: 585.0, open: 582.0, high: 591.0, low: 579.0, prevClose: 580.0, sector: 'Finance', volatility: 0.016, desc: 'The largest public sector banking and financial services institution in India.' },
-  { ticker: 'BHARTIARTL.NS', name: 'Bharti Airtel Ltd', price: 890.0, open: 885.0, high: 898.0, low: 881.0, prevClose: 884.0, sector: 'Telecom', volatility: 0.013, desc: 'A leading global telecommunications company operating across 18 countries in Asia and Africa.' },
-  { ticker: 'ICICIBANK.NS', name: 'ICICI Bank Ltd', price: 955.0, open: 952.0, high: 963.0, low: 947.0, prevClose: 950.0, sector: 'Finance', volatility: 0.012, desc: 'Leading private sector bank offering diverse financial services through multi-channels.' }
+  { ticker: 'RELIANCE.NS', name: 'Reliance Industries Ltd', price: 2450.0, open: 2445.0, high: 2465.0, low: 2435.0, prevClose: 2440.0, sector: 'Energy & Retail', volatility: 0.012, desc: 'India\'s largest private conglomerate with presence in refining, retail, and telecommunications (Jio).', ath: 3029.0, atl: 860.0 },
+  { ticker: 'TCS.NS', name: 'Tata Consultancy Services', price: 3420.0, open: 3410.0, high: 3445.0, low: 3395.0, prevClose: 3405.0, sector: 'Technology', volatility: 0.01, desc: 'A leading global IT services provider and anchor company of the Tata Group.', ath: 4254.0, atl: 1500.0 },
+  { ticker: 'INFY.NS', name: 'Infosys Ltd', price: 1450.0, open: 1452.0, high: 1468.0, low: 1442.0, prevClose: 1455.0, sector: 'Technology', volatility: 0.015, desc: 'Pioneer of the Indian IT service model providing business consulting and technology outsourcing.', ath: 1953.0, atl: 650.0 },
+  { ticker: 'HDFCBANK.NS', name: 'HDFC Bank Ltd', price: 1620.0, open: 1615.0, high: 1632.0, low: 1608.0, prevClose: 1612.0, sector: 'Finance', volatility: 0.011, desc: 'India\'s largest private sector bank by assets and market capitalization.', ath: 1757.0, atl: 700.0 },
+  { ticker: 'SBIN.NS', name: 'State Bank of India', price: 585.0, open: 582.0, high: 591.0, low: 579.0, prevClose: 580.0, sector: 'Finance', volatility: 0.016, desc: 'The largest public sector banking and financial services institution in India.', ath: 912.0, atl: 150.0 },
+  { ticker: 'BHARTIARTL.NS', name: 'Bharti Airtel Ltd', price: 890.0, open: 885.0, high: 898.0, low: 881.0, prevClose: 884.0, sector: 'Telecom', volatility: 0.013, desc: 'A leading global telecommunications company operating across 18 countries in Asia and Africa.', ath: 1460.0, atl: 280.0 },
+  { ticker: 'ICICIBANK.NS', name: 'ICICI Bank Ltd', price: 955.0, open: 952.0, high: 963.0, low: 947.0, prevClose: 950.0, sector: 'Finance', volatility: 0.012, desc: 'Leading private sector bank offering diverse financial services through multi-channels.', ath: 1170.0, atl: 300.0 }
 ];
 
 const INITIAL_LESSONS = [
@@ -286,13 +286,22 @@ export const MarketProvider = ({ children }) => {
   };
 
   // State Declarations
-  const [cash, setCash] = useState(() => loadState('cash', 500000)); // Starting cash ₹5,00,000
+  const [cash, setCash] = useState(() => {
+    const val = loadState('cash', 500000);
+    return typeof val === 'number' ? val : parseFloat(val) || 500000;
+  });
   const [portfolio, setPortfolio] = useState(() => loadState('portfolio', {}));
   const [stocks, setStocks] = useState(() => {
     const savedStocks = loadState('stocks', null);
     if (savedStocks) return savedStocks;
     return INITIAL_INDIAN_STOCKS;
   });
+  
+  // Auth state declarations
+  const [users, setUsers] = useState(() => loadState('users', [
+    { username: 'admin', email: 'admin@tradecraft.com', password: 'adminpass' }
+  ]));
+  const [currentUser, setCurrentUser] = useState(() => loadState('currentUser', null));
   
   const [priceHistory, setPriceHistory] = useState(() => {
     const savedHistory = loadState('priceHistory', null);
@@ -345,6 +354,8 @@ export const MarketProvider = ({ children }) => {
   useEffect(() => { saveState('lessons', lessons); }, [lessons]);
   useEffect(() => { saveState('transactionHistory', transactionHistory); }, [transactionHistory]);
   useEffect(() => { saveState('nifty', nifty); }, [nifty]);
+  useEffect(() => { saveState('users', users); }, [users]);
+  useEffect(() => { saveState('currentUser', currentUser); }, [currentUser]);
   useEffect(() => { saveState('bankNifty', bankNifty); }, [bankNifty]);
   useEffect(() => { saveState('newsFeed', newsFeed); }, [newsFeed]);
 
@@ -511,8 +522,12 @@ export const MarketProvider = ({ children }) => {
     }
 
     try {
-      const promises = uniqueTickers.map(ticker => fetchStockHistoryFromAPI(ticker, '1d'));
-      const results = await Promise.all(promises);
+      const results = [];
+      for (let ticker of uniqueTickers) {
+        const res = await fetchStockHistoryFromAPI(ticker, '1d');
+        results.push(res);
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
 
       setStocks(prevStocks => {
         let updatedStocks = [...prevStocks];
@@ -530,7 +545,9 @@ export const MarketProvider = ({ children }) => {
               prevClose: parseFloat(res.prevClose.toFixed(2)),
               sector: updatedStocks[existingStockIdx]?.sector || 'Finance & Equity',
               volatility: updatedStocks[existingStockIdx]?.volatility || 0.015,
-              desc: updatedStocks[existingStockIdx]?.desc || `Real-time public stock listed on ${res.exchange}`
+              desc: updatedStocks[existingStockIdx]?.desc || `Real-time public stock listed on ${res.exchange}`,
+              ath: updatedStocks[existingStockIdx]?.ath || parseFloat((res.high * 1.35).toFixed(2)),
+              atl: updatedStocks[existingStockIdx]?.atl || parseFloat((res.low * 0.65).toFixed(2))
             };
 
             if (existingStockIdx > -1) {
@@ -584,7 +601,7 @@ export const MarketProvider = ({ children }) => {
       }
 
       // Also trigger a background news sync
-      fetchMarketNewsFromAPI('Nifty 50');
+      fetchMarketNewsFromAPI('Indian Stock Market');
     } catch (e) {
       setApiErrorMsg("Real-time API is currently rate-limited. Falling back to local market snapshots.");
       console.warn("Sync failed, rate limit or network issue.", e);
@@ -596,7 +613,7 @@ export const MarketProvider = ({ children }) => {
   // Sync on startup, and set up automatic periodic sync every 15 seconds
   useEffect(() => {
     syncStocksListWithAPI();
-    fetchMarketNewsFromAPI('Nifty 50');
+    fetchMarketNewsFromAPI('Indian Stock Market');
 
     const interval = setInterval(() => {
       syncStocksListWithAPI();
@@ -627,7 +644,9 @@ export const MarketProvider = ({ children }) => {
         prevClose: data.prevClose,
         sector: 'Searched Stock',
         volatility: 0.015,
-        desc: `Public equity listed on ${data.exchange}. Added from real-time quote search.`
+        desc: `Public equity listed on ${data.exchange}. Added from real-time quote search.`,
+        ath: parseFloat((data.high * 1.35).toFixed(2)),
+        atl: parseFloat((data.low * 0.65).toFixed(2))
       };
 
       setStocks(prev => [...prev, newStock]);
@@ -818,6 +837,38 @@ export const MarketProvider = ({ children }) => {
     }
   }, [lessons, triggerAlert, playSound, checkAndAwardBadge]);
 
+  // Auth actions helper callbacks
+  const signUpUser = useCallback((username, email, password) => {
+    const emailLower = email.toLowerCase().trim();
+    if (users.some(u => u.email.toLowerCase() === emailLower)) {
+      triggerAlert("An account with this email already exists.", "error");
+      return false;
+    }
+    const newUser = { username: username.trim(), email: emailLower, password: password.trim() };
+    setUsers(prev => [...prev, newUser]);
+    setCurrentUser(newUser);
+    triggerAlert(`Welcome, ${newUser.username}! Account created successfully.`, "success");
+    return true;
+  }, [users, triggerAlert]);
+
+  const signInUser = useCallback((email, password) => {
+    const emailLower = email.toLowerCase().trim();
+    const foundUser = users.find(u => u.email.toLowerCase() === emailLower && u.password === password.trim());
+    if (foundUser) {
+      setCurrentUser(foundUser);
+      triggerAlert(`Welcome back, ${foundUser.username}! Logged in successfully.`, "success");
+      return true;
+    } else {
+      triggerAlert("Invalid email or password. Please try again.", "error");
+      return false;
+    }
+  }, [users, triggerAlert]);
+
+  const signOutUser = useCallback(() => {
+    setCurrentUser(null);
+    triggerAlert("Logged out successfully.", "success");
+  }, [triggerAlert]);
+
   const getPortfolioValue = useCallback(() => {
     let holdingsVal = 0;
     Object.keys(portfolio).forEach(ticker => {
@@ -867,7 +918,12 @@ export const MarketProvider = ({ children }) => {
       nifty,
       bankNifty,
       newsFeed,
-      fetchMarketNewsFromAPI
+      fetchMarketNewsFromAPI,
+      users,
+      currentUser,
+      signUpUser,
+      signInUser,
+      signOutUser
     }}>
       {children}
     </MarketContext.Provider>
