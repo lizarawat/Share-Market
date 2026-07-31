@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMarket } from '../context/MarketContext';
-import { Calendar, ZoomIn, ZoomOut, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
+import { Calendar, ZoomIn, ZoomOut, RotateCcw, Maximize2, Minimize2, X } from 'lucide-react';
 
 const format24hTime = (timeStr) => {
   if (!timeStr) return '';
@@ -326,9 +326,9 @@ const StockChart = ({ ticker }) => {
   }
 
   // Dimensions of SVG
-  const width = isExpanded ? 1000 : 600;
-  const height = isExpanded ? 420 : 280;
-  const paddingRight = 55;
+  const width = isExpanded ? 1100 : 600;
+  const height = isExpanded ? 500 : 280;
+  const paddingRight = 85;
   const paddingTop = 20;
   const paddingBottom = 30;
   const paddingLeft = 15;
@@ -547,22 +547,71 @@ const StockChart = ({ ticker }) => {
         left: 0,
         width: '100vw',
         height: '100vh',
-        background: '#0b0f19',
+        background: '#0a0e17',
         zIndex: 99999,
-        padding: '2.5rem',
+        padding: '2rem 3rem 3rem 3rem',
         display: 'flex',
         flexDirection: 'column',
         gap: '1rem',
-        boxSizing: 'border-box'
+        boxSizing: 'border-box',
+        overflow: 'hidden'
       } : {
         display: 'flex',
         flexDirection: 'column',
         gap: '1rem',
         height: '100%',
-        width: '100%'
+        width: '100%',
+        position: 'relative'
       }}
     >
       
+      {/* Expanded Modal Header */}
+      {isExpanded && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderBottom: '1px solid var(--border)',
+          paddingBottom: '0.75rem',
+          marginBottom: '0.25rem'
+        }}>
+          <div>
+            <h2 style={{ fontSize: '1.3rem', fontWeight: 800, margin: 0, color: '#fff', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>📈 {ticker} Full Screen Analytics</span>
+              <span style={{ fontSize: '0.7rem', background: 'var(--primary-glow)', color: 'var(--primary)', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700 }}>
+                {selectedTimeframe.label}
+              </span>
+            </h2>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+              Interact by dragging the canvas to pan, or pinch/scroll to zoom. Mouse coordinates track cursor precisely.
+            </p>
+          </div>
+          <button
+            onClick={() => setIsExpanded(false)}
+            style={{
+              background: 'var(--danger)',
+              border: 'none',
+              borderRadius: '6px',
+              padding: '0.45rem 1rem',
+              color: '#fff',
+              cursor: 'pointer',
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              transition: 'opacity var(--transition-fast)',
+              boxShadow: '0 4px 12px rgba(244, 63, 94, 0.2)'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = 0.9}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = 1}
+          >
+            <X size={14} />
+            Close Full Screen
+          </button>
+        </div>
+      )}
+
       {/* Timeframes and layout controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
         
@@ -664,26 +713,6 @@ const StockChart = ({ ticker }) => {
             />
             Trendline
           </label>
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            style={{
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid var(--border)',
-              borderRadius: '6px',
-              padding: '0.35rem 0.5rem',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all var(--transition-fast)',
-              marginLeft: '0.25rem'
-            }}
-            className="glass-card-interactive"
-            title={isExpanded ? "Exit Full View" : "Full View / Expand"}
-          >
-            {isExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
-          </button>
         </div>
       </div>
 
@@ -713,7 +742,32 @@ const StockChart = ({ ticker }) => {
       </div>
 
       {/* SVG Canvas Board */}
-      <div style={{ position: 'relative', flex: 1, minHeight: isExpanded ? '340px' : '240px' }}>
+      <div style={{ position: 'relative', flex: 1, minHeight: isExpanded ? '460px' : '240px' }}>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          style={{
+            position: 'absolute',
+            top: '8px',
+            right: '92px',
+            background: 'rgba(11, 15, 25, 0.85)',
+            border: '1px solid var(--border)',
+            borderRadius: '6px',
+            padding: '0.35rem 0.5rem',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'all var(--transition-fast)',
+            zIndex: 10,
+            backdropFilter: 'blur(4px)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+          }}
+          className="glass-card-interactive"
+          title={isExpanded ? "Exit Full View" : "Full View / Expand"}
+        >
+          {isExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+        </button>
         <svg
           ref={svgRef}
           width="100%"
