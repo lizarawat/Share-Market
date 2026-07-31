@@ -359,6 +359,8 @@ export const MarketProvider = ({ children }) => {
   const [lessons, setLessons] = useState(() => loadState('lessons', INITIAL_LESSONS));
   const [transactionHistory, setTransactionHistory] = useState(() => loadState('transactionHistory', []));
   const [selectedStockTicker, setSelectedStockTicker] = useState('^NSEI');
+  const [activeCompanyDetails, setActiveCompanyDetails] = useState(null);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
   
   // Real-time API state indicators
   const [isApiLoading, setIsApiLoading] = useState(false);
@@ -995,6 +997,131 @@ export const MarketProvider = ({ children }) => {
     return parseFloat((cash + getPortfolioValue()).toFixed(2));
   }, [cash, getPortfolioValue]);
 
+  const getMockCompanyDetails = useCallback((ticker) => {
+    const stock = stocks.find(s => s.ticker === ticker) || { name: ticker, sector: 'Equities', desc: 'Public listed equity on NSE.' };
+    
+    let officers = [
+      { name: "Rajesh Kumar", title: "Chief Executive Officer" },
+      { name: "Amit Sharma", title: "Chief Financial Officer" },
+      { name: "Priya Patel", title: "Compliance Officer & CS" }
+    ];
+
+    if (ticker === 'RELIANCE.NS') {
+      officers = [
+        { name: "Mukesh Ambani", title: "Chairman & Managing Director" },
+        { name: "Alok Agarwal", title: "Chief Financial Officer" },
+        { name: "Nita Ambani", title: "Non-Executive Director" }
+      ];
+    } else if (ticker === 'TCS.NS') {
+      officers = [
+        { name: "K. Krithivasan", title: "Chief Executive Officer & MD" },
+        { name: "Samir Seksaria", title: "Chief Financial Officer" },
+        { name: "N. Chandrasekaran", title: "Chairman" }
+      ];
+    } else if (ticker === 'INFY.NS') {
+      officers = [
+        { name: "Salil Parekh", title: "Chief Executive Officer & MD" },
+        { name: "Jayesh Sanghrajka", title: "Chief Financial Officer" },
+        { name: "Nandan Nilekani", title: "Chairman" }
+      ];
+    } else if (ticker === 'HDFCBANK.NS') {
+      officers = [
+        { name: "Sashidhar Jagdishan", title: "Managing Director & CEO" },
+        { name: "Srinivasan Vaidyanathan", title: "Chief Financial Officer" },
+        { name: "Atanu Chakraborty", title: "Chairman" }
+      ];
+    } else if (ticker === 'SBIN.NS') {
+      officers = [
+        { name: "Dinesh Kumar Khara", title: "Chairman" },
+        { name: "Kama Shastry", title: "Managing Director" },
+        { name: "Saloni Narayan", title: "Deputy Managing Director" }
+      ];
+    }
+
+    const news = [
+      {
+        title: `${stock.name} announces quarterly expansion plans and technological upgrades`,
+        publisher: "Bloomberg Quint",
+        providerPublishTime: Date.now() - 3600 * 1000
+      },
+      {
+        title: `Board of ${ticker} approves special interim dividend for shareholders`,
+        publisher: "MoneyControl",
+        providerPublishTime: Date.now() - 7200 * 1000
+      },
+      {
+        title: `Market analysts upgrade ratings for ${ticker} following robust volume growth`,
+        publisher: "Economic Times",
+        providerPublishTime: Date.now() - 14400 * 1000
+      }
+    ];
+
+    let shares = "2.40B";
+    if (ticker === 'RELIANCE.NS') shares = "6.76B";
+    else if (ticker === 'TCS.NS') shares = "3.62B";
+    else if (ticker === 'INFY.NS') shares = "4.15B";
+    else if (ticker === 'HDFCBANK.NS') shares = "7.60B";
+
+    return {
+      ticker,
+      news,
+      bio: stock.desc || "No company biography is currently registered.",
+      officers,
+      shares,
+      sector: stock.sector || "General Equities",
+      industry: "Conglomerate Operations",
+      website: `https://www.google.com/search?q=${encodeURIComponent(stock.name)}`
+    };
+  }, [stocks]);
+
+  const fetchCompanyDetails = useCallback(async (ticker) => {
+    setIsDetailsLoading(true);
+    try {
+      // 1. Fetch news via search API
+      const searchRes = await fetch(`/api-yahoo/v1/finance/search?q=${ticker}`);
+      const searchData = await searchRes.json();
+      const news = searchData.news || [];
+
+      // 2. Fetch profile via summary API
+      const summaryRes = await fetch(`/api-yahoo/v10/finance/quoteSummary/${ticker}?modules=assetProfile,defaultKeyStatistics`);
+      const summaryData = await summaryRes.json();
+      const result = summaryData.quoteSummary?.result?.[0] || {};
+      
+      const assetProfile = result.assetProfile || {};
+      const keyStats = result.defaultKeyStatistics || {};
+
+      const mockFallback = getMockCompanyDetails(ticker);
+
+      setActiveCompanyDetails({
+        ticker,
+        news: news.length > 0 ? news.map(n => ({
+          title: n.title,
+          publisher: n.publisher || "Finance Feed",
+          providerPublishTime: n.providerPublishTime ? n.providerPublishTime * 1000 : Date.now()
+        })) : mockFallback.news,
+        bio: assetProfile.longBusinessSummary || mockFallback.bio,
+        officers: (assetProfile.companyOfficers && assetProfile.companyOfficers.length > 0) 
+          ? assetProfile.companyOfficers.map(o => ({ name: o.name, title: o.title })) 
+          : mockFallback.officers,
+        shares: keyStats.sharesOutstanding?.fmt || keyStats.sharesOutstanding?.longFmt || mockFallback.shares,
+        sector: assetProfile.sector || mockFallback.sector,
+        industry: assetProfile.industry || mockFallback.industry,
+        website: assetProfile.website || mockFallback.website
+      });
+    } catch (error) {
+      console.warn("Failed to fetch company details from Yahoo Finance. Falling back to mock data:", error);
+      setActiveCompanyDetails(getMockCompanyDetails(ticker));
+    } finally {
+      setIsDetailsLoading(false);
+    }
+  }, [getMockCompanyDetails]);
+
+  useEffect(() => {
+    if (selectedStockTicker) {
+      fetchCompanyDetails(selectedStockTicker);
+    }
+  }, [selectedStockTicker, fetchCompanyDetails]);
+
   return (
     <MarketContext.Provider value={{
       cash,
@@ -1009,6 +1136,8 @@ export const MarketProvider = ({ children }) => {
       transactionHistory,
       selectedStockTicker,
       setSelectedStockTicker,
+      activeCompanyDetails,
+      isDetailsLoading,
       getLevelInfo,
       buyStock,
       sellStock,

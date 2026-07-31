@@ -24,7 +24,10 @@ const Simulator = () => {
     searchRealTimeStock,
     addStockToWatchlist,
     isApiLoading,
-    triggerAlert
+    triggerAlert,
+    activeCompanyDetails,
+    isDetailsLoading,
+    priceHistory
   } = useMarket();
 
   const [tradeQuantity, setTradeQuantity] = useState('10');
@@ -140,6 +143,47 @@ const Simulator = () => {
 
   // Display all stocks including indices in watchlist tabs row
   const activeWatchlistStocks = stocks;
+
+  // Dynamic Performance & Sentiment Calculations
+  let performanceStatus = "No performance data is currently available.";
+  let perfPct = 0;
+  if (priceHistory && priceHistory[stock.ticker] && priceHistory[stock.ticker].length > 1) {
+    const hist = priceHistory[stock.ticker];
+    const oldestPrice = hist[0].close;
+    const currentPrice = hist[hist.length - 1].close;
+    perfPct = parseFloat((((currentPrice - oldestPrice) / oldestPrice) * 100).toFixed(2));
+    if (perfPct >= 0) {
+      performanceStatus = `📈 Strong growth over this timeline, gaining +${perfPct}% overall.`;
+    } else {
+      performanceStatus = ` Had a downfall of ${perfPct}% in this time period.`;
+    }
+  }
+
+  let sentimentType = "Neutral";
+  let bullishPct = 50;
+  if (activeCompanyDetails && activeCompanyDetails.news) {
+    const articles = activeCompanyDetails.news;
+    let posCount = 0;
+    let negCount = 0;
+    const posWords = ['grow', 'profit', 'up', 'gain', 'buy', 'bull', 'success', 'record', 'high', 'beat', 'expansion', 'dividend', 'upgrade', 'robust'];
+    const negWords = ['fall', 'loss', 'down', 'drop', 'sell', 'bear', 'decline', 'concern', 'debt', 'risk', 'fail', 'warning', 'insufficient', 'downfall'];
+    
+    articles.forEach(art => {
+      const text = (art.title || '').toLowerCase();
+      posWords.forEach(w => { if (text.includes(w)) posCount++; });
+      negWords.forEach(w => { if (text.includes(w)) negCount++; });
+    });
+
+    const total = posCount + negCount;
+    if (total > 0) {
+      bullishPct = Math.round((posCount / total) * 100);
+    } else {
+      bullishPct = 50;
+    }
+    
+    if (bullishPct > 60) sentimentType = "Bullish";
+    else if (bullishPct < 40) sentimentType = "Bearish";
+  }
 
   return (
     <div className="fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
@@ -613,6 +657,150 @@ const Simulator = () => {
 
         </div>
 
+      </div>
+
+      {/* 📊 Company Intelligence & Live Feed Panel */}
+      <div className="glass-card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
+        <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <span>📊 Company Intelligence & Market Insights</span>
+          <span style={{ fontSize: '0.75rem', background: 'var(--primary-glow)', color: 'var(--primary)', padding: '0.15rem 0.45rem', borderRadius: '4px', fontWeight: 700 }}>
+            {stock.ticker}
+          </span>
+        </h2>
+
+        {isDetailsLoading ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '140px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Loading latest company intel & live metrics...</span>
+          </div>
+        ) : activeCompanyDetails ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
+            
+            {/* Left Column: Bio and Status Profile */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Company Profile & Performance</h3>
+              </div>
+              
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0, maxHeight: '120px', overflowY: 'auto' }}>
+                {activeCompanyDetails.bio}
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Shares Outstanding:</span>
+                  <strong style={{ color: '#fff' }}>{activeCompanyDetails.shares || 'N/A'}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Sector:</span>
+                  <strong style={{ color: '#fff' }}>{activeCompanyDetails.sector || 'N/A'}</strong>
+                </div>
+              </div>
+
+              {/* Company Status Summary at the End */}
+              <div style={{
+                background: perfPct >= 0 ? 'rgba(16, 185, 129, 0.04)' : 'rgba(244, 63, 94, 0.04)',
+                border: '1px solid',
+                borderColor: perfPct >= 0 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(244, 63, 94, 0.15)',
+                borderRadius: '8px',
+                padding: '0.75rem',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                color: perfPct >= 0 ? 'var(--success)' : 'var(--danger)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.4rem'
+              }}>
+                {performanceStatus}
+              </div>
+            </div>
+
+            {/* Middle Column: Officers & Public Opinion */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Key Management & Directors</h3>
+              </div>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {activeCompanyDetails.officers && activeCompanyDetails.officers.length > 0 ? (
+                  activeCompanyDetails.officers.slice(0, 3).map((off, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.01)', border: '1px solid var(--border)', borderRadius: '6px', padding: '0.45rem 0.65rem' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff' }}>{off.name}</span>
+                        <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>Officer Status: Active, Executive duties</span>
+                      </div>
+                      <span style={{ fontSize: '0.65rem', background: 'var(--primary-glow)', color: 'var(--primary)', padding: '0.15rem 0.35rem', borderRadius: '4px', fontWeight: 600, maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={off.title}>
+                        {off.title}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No officer credentials listed.</span>
+                )}
+              </div>
+
+              {/* Public Opinion Sentiment Gauge */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem', marginTop: '0.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', alignItems: 'center' }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>Public Opinion Sentiment:</span>
+                  <strong style={{ color: sentimentType === 'Bullish' ? 'var(--success)' : (sentimentType === 'Bearish' ? 'var(--danger)' : 'var(--text-secondary)') }}>
+                    {sentimentType} ({bullishPct}% Positive)
+                  </strong>
+                </div>
+                <div style={{ width: '100%', height: '5px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden', display: 'flex' }}>
+                  <div style={{ width: `${bullishPct}%`, background: 'var(--success)', height: '100%' }} />
+                  <div style={{ width: `${100 - bullishPct}%`, background: 'var(--danger)', height: '100%' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Right Column: Live News Stream */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+              <div style={{ borderBottom: '1px solid var(--border)', paddingBottom: '0.5rem' }}>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>Live Intelligence Stream</h3>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem', maxHeight: '235px', overflowY: 'auto' }}>
+                {activeCompanyDetails.news && activeCompanyDetails.news.length > 0 ? (
+                  activeCompanyDetails.news.map((item, idx) => (
+                    <a
+                      key={idx}
+                      href={item.link || `https://www.google.com/search?q=${encodeURIComponent(item.title)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.25rem',
+                        padding: '0.5rem 0.65rem',
+                        border: '1px solid var(--border)',
+                        borderRadius: '6px',
+                        background: 'rgba(255,255,255,0.01)',
+                        textDecoration: 'none',
+                        transition: 'border-color var(--transition-fast)'
+                      }}
+                      className="glass-card-interactive"
+                    >
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#fff', lineHeight: '1.4' }}>
+                        {item.title}
+                      </span>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'var(--text-muted)' }}>
+                        <span>Source: {item.publisher}</span>
+                        <span>{new Date(item.providerPublishTime).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                      </div>
+                    </a>
+                  ))
+                ) : (
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No live news bulletins available.</span>
+                )}
+              </div>
+            </div>
+
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '140px', border: '1px dashed var(--border)', borderRadius: '8px' }}>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No company details found for {stock.ticker}</span>
+          </div>
+        )}
       </div>
 
     </div>

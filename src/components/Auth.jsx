@@ -55,6 +55,28 @@ const Auth = () => {
       });
       setIsVerifyingOtp(true);
       triggerAlert(`Email OTP Verification code: ${code}`, "info");
+
+      // Send actual email via FormSubmit AJAX helper in background
+      fetch(`https://formsubmit.co/ajax/${emailTrimmed}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify({
+          _subject: "TradeCraft Academy - Registration Verification Code",
+          message: `Hello ${usernameTrimmed},\n\nYour 4-digit verification code to register at TradeCraft Academy is: ${code}\n\nEnter this code in the simulator to activate your trading account.\n\nHappy Trading!`,
+          _captcha: "false"
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        console.log("FormSubmit response:", data);
+        triggerAlert("A verification code has been dispatched to your email address.", "success");
+      })
+      .catch(err => {
+        console.warn("FormSubmit background dispatch failed:", err);
+      });
     } else {
       signInUser(emailTrimmed, passwordTrimmed);
     }
