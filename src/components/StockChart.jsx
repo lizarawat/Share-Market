@@ -274,13 +274,14 @@ const StockChart = ({ ticker }) => {
   }
 
   // Dynamic X-Axis Step interval rendering based on zoom levels:
-  // zoomX > 50 -> step 30
-  // zoomX <= 50 and > 20 -> step 10
-  // zoomX <= 20 -> step 5
-  let step = 30;
-  if (zoomX <= 20) {
+  let step = 20;
+  if (zoomX <= 12) {
+    step = 1;
+  } else if (zoomX <= 25) {
+    step = 2;
+  } else if (zoomX <= 45) {
     step = 5;
-  } else if (zoomX <= 50) {
+  } else if (zoomX <= 80) {
     step = 10;
   }
 

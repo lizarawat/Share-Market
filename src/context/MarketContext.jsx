@@ -17,7 +17,7 @@ const generateHistoricalData = (startPrice, points = 30, volatility = 0.015) => 
     const low = Math.min(open, close) * (1 - Math.random() * 0.005);
     
     data.push({
-      time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      time: time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\s*[aApP][mM]\s*$/, ''),
       open: parseFloat(open.toFixed(2)),
       high: parseFloat(high.toFixed(2)),
       low: parseFloat(low.toFixed(2)),
@@ -473,7 +473,7 @@ export const MarketProvider = ({ children }) => {
         if (o !== null && c !== null && h !== null && l !== null && o !== undefined) {
           const date = new Date(t * 1000);
           const timeStr = range === '1d' 
-            ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\s*[aApP][mM]\s*$/, '')
             : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 
           historyPoints.push({
@@ -901,23 +901,25 @@ export const MarketProvider = ({ children }) => {
   }, [stocks, portfolio, playSound, triggerAlert, checkAndAwardBadge]);
 
   const submitQuizAnswers = useCallback((lessonId, score) => {
-    let earnedXP = 0;
-    setLessons(prev => prev.map(lesson => {
-      if (lesson.id === lessonId) {
-        if (!lesson.completed) {
-          earnedXP = lesson.xpReward;
-        }
-        return { ...lesson, completed: true, quizScore: score };
+    const lesson = lessons.find(l => l.id === lessonId);
+    if (!lesson) return;
+
+    const isFirstTime = !lesson.completed;
+    const earnedXP = isFirstTime ? lesson.xpReward : 0;
+
+    setLessons(prev => prev.map(l => {
+      if (l.id === lessonId) {
+        return { ...l, completed: true, quizScore: score };
       }
-      return lesson;
+      return l;
     }));
 
-    if (earnedXP > 0) {
+    if (isFirstTime) {
       setXp(prev => prev + earnedXP);
       triggerAlert(`Completed Lesson! +${earnedXP} XP Earned.`, 'success');
       playSound('achievement');
       
-      const completedCount = lessons.filter(l => l.id === lessonId ? true : l.completed).length;
+      const completedCount = lessons.filter(l => l.completed).length + 1;
       if (completedCount === 1) checkAndAwardBadge("Quick Learner", "Completed your first financial lesson.");
       if (completedCount === 5) checkAndAwardBadge("Financial Analyst", "Successfully completed all educational models.");
     }

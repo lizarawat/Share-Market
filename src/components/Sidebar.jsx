@@ -30,9 +30,9 @@ const Sidebar = () => {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'lessons', label: 'Lessons', icon: BookOpen },
     { id: 'simulator', label: 'Simulator', icon: TrendingUp },
     { id: 'portfolio', label: 'Portfolio', icon: Briefcase },
+    { id: 'lessons', label: 'Lessons', icon: BookOpen },
     { id: 'quizzes', label: 'Quizzes', icon: Award },
     { id: 'news', label: 'News Room', icon: Newspaper }
   ];
