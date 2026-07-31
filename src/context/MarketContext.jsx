@@ -32,6 +32,8 @@ const generateHistoricalData = (startPrice, points = 30, volatility = 0.015) => 
 
 // Initial Indian Bluechip stocks watch list seeds
 const INITIAL_INDIAN_STOCKS = [
+  { ticker: '^NSEI', name: 'Nifty 50 Index', price: 24320.55, open: 24250.00, high: 24410.80, low: 24190.20, prevClose: 24180.10, sector: 'Broad Market Index', volatility: 0.008, desc: 'The benchmark index of the National Stock Exchange of India (NSE), tracking the 50 largest blue-chip equities.', ath: 24500.00, atl: 18000.00 },
+  { ticker: '^NSEBANK', name: 'Nifty Bank Index', price: 51200.10, open: 51300.20, high: 51450.80, low: 51050.20, prevClose: 51300.20, sector: 'Broad Market Index', volatility: 0.012, desc: 'The banking sector index tracking the 12 most liquid and large banking stocks listed on the NSE.', ath: 53500.00, atl: 35000.00 },
   { ticker: 'RELIANCE.NS', name: 'Reliance Industries Ltd', price: 2450.0, open: 2445.0, high: 2465.0, low: 2435.0, prevClose: 2440.0, sector: 'Energy & Retail', volatility: 0.012, desc: 'India\'s largest private conglomerate with presence in refining, retail, and telecommunications (Jio).', ath: 3029.0, atl: 860.0 },
   { ticker: 'TCS.NS', name: 'Tata Consultancy Services', price: 3420.0, open: 3410.0, high: 3445.0, low: 3395.0, prevClose: 3405.0, sector: 'Technology', volatility: 0.01, desc: 'A leading global IT services provider and anchor company of the Tata Group.', ath: 4254.0, atl: 1500.0 },
   { ticker: 'INFY.NS', name: 'Infosys Ltd', price: 1450.0, open: 1452.0, high: 1468.0, low: 1442.0, prevClose: 1455.0, sector: 'Technology', volatility: 0.015, desc: 'Pioneer of the Indian IT service model providing business consulting and technology outsourcing.', ath: 1953.0, atl: 650.0 },
@@ -328,7 +330,16 @@ export const MarketProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => loadState('currentUser', null));
   
   const [priceHistory, setPriceHistory] = useState(() => {
-    const savedHistory = loadState('priceHistory', null) || {};
+    // Migration: clear cache once to fetch year-inclusive historical timestamps
+    const migVer = localStorage.getItem('market_app_mig_v1');
+    let savedHistory = {};
+    if (migVer) {
+      savedHistory = loadState('priceHistory', null) || {};
+    } else {
+      localStorage.removeItem('market_app_in_priceHistory');
+      localStorage.setItem('market_app_mig_v1', 'true');
+    }
+
     let updated = false;
     INITIAL_INDIAN_STOCKS.forEach(stock => {
       if (!savedHistory[stock.ticker]) {
@@ -347,7 +358,7 @@ export const MarketProvider = ({ children }) => {
   const [badges, setBadges] = useState(() => loadState('badges', []));
   const [lessons, setLessons] = useState(() => loadState('lessons', INITIAL_LESSONS));
   const [transactionHistory, setTransactionHistory] = useState(() => loadState('transactionHistory', []));
-  const [selectedStockTicker, setSelectedStockTicker] = useState('RELIANCE.NS');
+  const [selectedStockTicker, setSelectedStockTicker] = useState('^NSEI');
   
   // Real-time API state indicators
   const [isApiLoading, setIsApiLoading] = useState(false);
@@ -472,9 +483,14 @@ export const MarketProvider = ({ children }) => {
         
         if (o !== null && c !== null && h !== null && l !== null && o !== undefined) {
           const date = new Date(t * 1000);
-          const timeStr = range === '1d' 
-            ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\s*[aApP][mM]\s*$/, '')
-            : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+          let timeStr = "";
+          if (range === '1d') {
+            timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\s*[aApP][mM]\s*$/, '');
+          } else if (interval === '1mo') {
+            timeStr = date.toLocaleDateString([], { year: 'numeric', month: 'short' });
+          } else {
+            timeStr = date.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' });
+          }
 
           historyPoints.push({
             time: timeStr,

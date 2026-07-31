@@ -67,7 +67,8 @@ const Dashboard = () => {
       const change = parseFloat((s.price - s.prevClose).toFixed(2));
       const pct = parseFloat(((change / s.prevClose) * 100).toFixed(2));
       return { ...s, change, pct };
-    });
+    })
+    .sort((a, b) => b.pct - a.pct);
 
   const topGainers = [...sortedStocks]
     .filter(s => s.pct > 0)

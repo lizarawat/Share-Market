@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useMarket } from '../context/MarketContext';
-import { Calendar, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Calendar, ZoomIn, ZoomOut, RotateCcw, Maximize2, Minimize2 } from 'lucide-react';
+
+const format24hTime = (timeStr) => {
+  if (!timeStr) return '';
+  const match = timeStr.match(/(\d+):(\d+)\s*([aApP][mM])/);
+  if (match) {
+    let hours = parseInt(match[1]);
+    const minutes = match[2];
+    const ampm = match[3].toLowerCase();
+    if (ampm === 'pm' && hours < 12) {
+      hours += 12;
+    } else if (ampm === 'am' && hours === 12) {
+      hours = 0;
+    }
+    return `${hours.toString().padStart(2, '0')}:${minutes}`;
+  }
+  return timeStr.replace(/\s*[aApP][mM]\s*$/, '');
+};
 
 const TIMEFRAMES = [
   { label: '1m', interval: '1m', range: '1d', aggregate: 1 },
@@ -71,21 +88,29 @@ const StockChart = ({ ticker }) => {
   const [scrollOffset, setScrollOffset] = useState(0);
 
   const svgRef = React.useRef(null);
+  const containerRef = React.useRef(null);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Chart drag to pan states
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartX, setDragStartX] = useState(0);
+  const [dragStartY, setDragStartY] = useState(0);
   const [dragStartScrollOffset, setDragStartScrollOffset] = useState(0);
+  const [yPanOffset, setYPanOffset] = useState(0);
+  const [dragStartYPanOffset, setDragStartYPanOffset] = useState(0);
 
-  // Reset scrollOffset on stock change
+  // Reset scrollOffset and yPanOffset on stock change
+  const [mousePos, setMousePos] = useState({ x: null, y: null });
+
   useEffect(() => {
     setScrollOffset(0);
+    setYPanOffset(0);
   }, [ticker]);
 
   // Touchpad non-passive wheel events mapping (pinch-zoom deltaY and horizontal pan deltaX)
   useEffect(() => {
-    const svgEl = svgRef.current;
-    if (!svgEl) return;
+    const containerEl = containerRef.current;
+    if (!containerEl) return;
 
     const onWheel = (e) => {
       e.preventDefault();
@@ -112,11 +137,11 @@ const StockChart = ({ ticker }) => {
       }
     };
 
-    svgEl.addEventListener('wheel', onWheel, { passive: false });
+    containerEl.addEventListener('wheel', onWheel, { passive: false });
     return () => {
-      svgEl.removeEventListener('wheel', onWheel);
+      containerEl.removeEventListener('wheel', onWheel);
     };
-  }, [svgRef, zoomX, chartData.length, scrollOffset]);
+  }, [containerRef, zoomX, chartData.length, scrollOffset]);
 
   // Fetch history from API whenever ticker or range/interval changes
   useEffect(() => {
@@ -170,9 +195,10 @@ const StockChart = ({ ticker }) => {
   }, [ticker, selectedTimeframe, priceHistory, fetchStockHistoryFromAPI, stocks]);
 
   const resetZoom = () => {
-    setZoomX(65);
+    setZoomX(chartData.length ? Math.max(10, chartData.length) : 65);
     setZoomY(1.0);
     setScrollOffset(0);
+    setYPanOffset(0);
   };
 
   const data = chartData;
@@ -273,21 +299,22 @@ const StockChart = ({ ticker }) => {
     finalRenderData = ha;
   }
 
-  // Dynamic X-Axis Step interval rendering based on zoom levels:
+  // Dynamic X-Axis Step interval rendering based on visible valid candles count:
+  const validVisibleCount = finalRenderData.filter(d => !d.isMockSlot).length;
   let step = 20;
-  if (zoomX <= 12) {
+  if (validVisibleCount <= 12) {
     step = 1;
-  } else if (zoomX <= 25) {
+  } else if (validVisibleCount <= 25) {
     step = 2;
-  } else if (zoomX <= 45) {
+  } else if (validVisibleCount <= 45) {
     step = 5;
-  } else if (zoomX <= 80) {
+  } else if (validVisibleCount <= 80) {
     step = 10;
   }
 
   // Dimensions of SVG
-  const width = 600;
-  const height = 280;
+  const width = isExpanded ? 1000 : 600;
+  const height = isExpanded ? 420 : 280;
   const paddingRight = 55;
   const paddingTop = 20;
   const paddingBottom = 30;
@@ -310,7 +337,7 @@ const StockChart = ({ ticker }) => {
   }
   
   const valRange = maxVal - minVal;
-  const midVal = (maxVal + minVal) / 2;
+  const midVal = ((maxVal + minVal) / 2) + yPanOffset;
   const halfRange = ((valRange === 0 ? 10 : valRange) / 2) * zoomY;
 
   const yMax = midVal + halfRange;
@@ -322,6 +349,11 @@ const StockChart = ({ ticker }) => {
 
   const getY = (value) => {
     return paddingTop + chartHeight - ((value - yMin) / (yMax - yMin)) * chartHeight;
+  };
+
+  const getPriceFromY = (y) => {
+    const pct = (paddingTop + chartHeight - y) / chartHeight;
+    return yMin + pct * (yMax - yMin);
   };
 
   // Line Chart path (ignoring empty mock slots)
@@ -421,9 +453,17 @@ const StockChart = ({ ticker }) => {
     }
   }
 
-  // Y-Axis division lines
+  // Y-Axis division lines based on vertical zoom level
+  let gridCount = 6;
+  if (zoomY <= 0.25) {
+    gridCount = 12;
+  } else if (zoomY <= 0.5) {
+    gridCount = 10;
+  } else if (zoomY <= 0.75) {
+    gridCount = 8;
+  }
+
   const gridLines = [];
-  const gridCount = 4;
   for (let i = 0; i <= gridCount; i++) {
     const val = yMin + (i / gridCount) * (yMax - yMin);
     gridLines.push(val);
@@ -433,16 +473,25 @@ const StockChart = ({ ticker }) => {
     if (e.button !== 0) return; // left click only
     setIsDragging(true);
     setDragStartX(e.clientX);
+    setDragStartY(e.clientY);
     setDragStartScrollOffset(scrollOffset);
+    setDragStartYPanOffset(yPanOffset);
   };
 
   const handleMouseMove = (e) => {
     const svgRect = e.currentTarget.getBoundingClientRect();
     const mouseX = e.clientX - svgRect.left;
+    const mouseY = e.clientY - svgRect.top;
     
-    // Scale client X pixel to viewBox layout grid width
-    const relativeX = (mouseX / svgRect.width) * width - paddingLeft;
-    const index = Math.round((relativeX / chartWidth) * (finalRenderData.length - 1));
+    // Scale client X and Y pixels to viewBox layout grid coordinates
+    const relativeX = (mouseX / svgRect.width) * width;
+    const relativeY = (mouseY / svgRect.height) * height;
+    
+    setMousePos({ x: relativeX, y: relativeY });
+
+    // Scale client X pixel to viewBox layout grid width (within chart margin)
+    const relativeChartX = relativeX - paddingLeft;
+    const index = Math.round((relativeChartX / chartWidth) * (finalRenderData.length - 1));
     
     if (index >= 0 && index < finalRenderData.length) {
       setHoverIndex(index);
@@ -450,8 +499,14 @@ const StockChart = ({ ticker }) => {
 
     if (isDragging) {
       const deltaX = e.clientX - dragStartX;
+      const deltaY = e.clientY - dragStartY;
+
       const barsMoved = Math.round((deltaX / svgRect.width) * zoomX);
       setScrollOffset(Math.max(minOffset, Math.min(maxOffset, dragStartScrollOffset + barsMoved)));
+
+      // Convert deltaY mouse pixel shift to a price delta shift
+      const priceDelta = (deltaY / svgRect.height) * (yMax - yMin);
+      setYPanOffset(dragStartYPanOffset + priceDelta);
     }
   };
 
@@ -462,6 +517,7 @@ const StockChart = ({ ticker }) => {
   const handleMouseLeave = () => {
     setHoverIndex(null);
     setIsDragging(false);
+    setMousePos({ x: null, y: null });
   };
 
   const activeHoverData = hoverIndex !== null && !finalRenderData[hoverIndex]?.isMockSlot ? finalRenderData[hoverIndex] : null;
@@ -470,7 +526,29 @@ const StockChart = ({ ticker }) => {
   const maxVol = Math.max(...finalRenderData.map(d => d.volume || (Math.abs(d.close - d.open) * 1000 + 500)));
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', height: '100%', width: '100%' }}>
+    <div 
+      ref={containerRef}
+      style={isExpanded ? {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        background: '#0b0f19',
+        zIndex: 99999,
+        padding: '2.5rem',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1rem',
+        boxSizing: 'border-box'
+      } : {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '1rem',
+        height: '100%',
+        width: '100%'
+      }}
+    >
       
       {/* Timeframes and layout controls */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
@@ -573,6 +651,26 @@ const StockChart = ({ ticker }) => {
             />
             Trendline
           </label>
+          <button
+            onClick={() => setIsExpanded(!isExpanded)}
+            style={{
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px',
+              padding: '0.35rem 0.5rem',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all var(--transition-fast)',
+              marginLeft: '0.25rem'
+            }}
+            className="glass-card-interactive"
+            title={isExpanded ? "Exit Full View" : "Full View / Expand"}
+          >
+            {isExpanded ? <Minimize2 size={12} /> : <Maximize2 size={12} />}
+          </button>
         </div>
       </div>
 
@@ -590,7 +688,7 @@ const StockChart = ({ ticker }) => {
       }}>
         {activeHoverData ? (
           <>
-            <span>Time: <strong style={{ color: '#fff' }}>{activeHoverData.time}</strong></span>
+            <span>Time: <strong style={{ color: '#fff' }}>{format24hTime(activeHoverData.time)}</strong></span>
             <span>Open: <strong style={{ color: '#fff' }}>₹{activeHoverData.open.toFixed(2)}</strong></span>
             <span>High: <strong style={{ color: 'var(--success)' }}>₹{activeHoverData.high.toFixed(2)}</strong></span>
             <span>Low: <strong style={{ color: 'var(--danger)' }}>₹{activeHoverData.low.toFixed(2)}</strong></span>
@@ -602,7 +700,7 @@ const StockChart = ({ ticker }) => {
       </div>
 
       {/* SVG Canvas Board */}
-      <div style={{ position: 'relative', flex: 1, minHeight: '240px' }}>
+      <div style={{ position: 'relative', flex: 1, minHeight: isExpanded ? '340px' : '240px' }}>
         <svg
           ref={svgRef}
           width="100%"
@@ -619,6 +717,18 @@ const StockChart = ({ ticker }) => {
             cursor: isDragging ? 'grabbing' : (hoverIndex !== null ? 'crosshair' : 'grab')
           }}
         >
+          {/* Clip path definition to prevent candles and indicators from leaking out */}
+          <defs>
+            <clipPath id="chart-area-clip">
+              <rect
+                x={paddingLeft}
+                y={paddingTop}
+                width={chartWidth}
+                height={chartHeight}
+              />
+            </clipPath>
+          </defs>
+
           {/* Grid lines and Y prices (Legible & High Contrast) */}
           {gridLines.map((val, idx) => {
             const y = getY(val);
@@ -641,7 +751,7 @@ const StockChart = ({ ticker }) => {
                   fontFamily="monospace"
                   fontWeight="700"
                 >
-                  ₹{val.toLocaleString('en-IN', { maximumFractionDigits: 1 })}
+                  ₹{val.toFixed(2)}
                 </text>
               </g>
             );
@@ -666,141 +776,210 @@ const StockChart = ({ ticker }) => {
             );
           })}
 
-          {/* Volume Profile Bars (TradingView style at bottom) */}
-          <g opacity="0.12">
-            {finalRenderData.map((d, idx) => {
-              if (d.isMockSlot) return null;
-              const x = getX(idx);
-              const vol = d.volume || (Math.abs(d.close - d.open) * 1000 + 500);
-              const volHeight = (vol / (maxVol || 1)) * (chartHeight * 0.18);
-              const y = paddingTop + chartHeight - volHeight;
-              const isUpCandle = d.close >= d.open;
-              const fill = isUpCandle ? 'var(--success)' : 'var(--danger)';
-              const candleWidth = (chartWidth / finalRenderData.length) * 0.65;
-              const barWidth = Math.max(1.5, candleWidth * 0.8);
-              return (
-                <rect
-                  key={idx}
-                  x={x - barWidth / 2}
-                  y={y}
-                  width={barWidth}
-                  height={volHeight}
-                  fill={fill}
-                />
-              );
-            })}
-          </g>
-
-          {/* Line view */}
-          {chartType === 'line' && linePath && (
-            <>
-              <defs>
-                <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
-                  <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.00" />
-                </linearGradient>
-              </defs>
-              <path
-                d={areaPath}
-                fill="url(#areaGrad)"
-              />
-              <path
-                d={linePath}
-                fill="none"
-                stroke="var(--accent)"
-                strokeWidth="2.5"
-              />
-            </>
-          )}
-
-          {/* Candlestick / Heikin-Ashi view */}
-          {(chartType === 'candlestick' || chartType === 'heikin-ashi') && (
-            <g>
+          {/* Bounded Chart Area Group */}
+          <g clipPath="url(#chart-area-clip)">
+            {/* Volume Profile Bars (TradingView style at bottom) */}
+            <g opacity="0.12">
               {finalRenderData.map((d, idx) => {
                 if (d.isMockSlot) return null;
                 const x = getX(idx);
-                const yOpen = getY(d.open);
-                const yClose = getY(d.close);
-                const yHigh = getY(d.high);
-                const yLow = getY(d.low);
-
+                const vol = d.volume || (Math.abs(d.close - d.open) * 1000 + 500);
+                const volHeight = (vol / (maxVol || 1)) * (chartHeight * 0.18);
+                const y = paddingTop + chartHeight - volHeight;
                 const isUpCandle = d.close >= d.open;
-                const fillColor = isUpCandle ? 'var(--success)' : 'var(--danger)';
-                const strokeColor = isUpCandle ? 'var(--success)' : 'var(--danger)';
+                const fill = isUpCandle ? 'var(--success)' : 'var(--danger)';
                 const candleWidth = (chartWidth / finalRenderData.length) * 0.65;
-
+                const barWidth = Math.max(1.5, candleWidth * 0.8);
                 return (
-                  <g key={idx}>
-                    {/* Wick line */}
-                    <line
-                      x1={x}
-                      y1={yHigh}
-                      x2={x}
-                      y2={yLow}
-                      stroke={strokeColor}
-                      strokeWidth="1.2"
-                    />
-                    {/* Body rect */}
-                    <rect
-                      x={x - candleWidth / 2}
-                      y={Math.min(yOpen, yClose)}
-                      width={candleWidth}
-                      height={Math.max(1.2, Math.abs(yOpen - yClose))}
-                      fill={fillColor}
-                      stroke={strokeColor}
-                      strokeWidth="0.5"
-                    />
-                  </g>
+                  <rect
+                    key={idx}
+                    x={x - barWidth / 2}
+                    y={y}
+                    width={barWidth}
+                    height={volHeight}
+                    fill={fill}
+                  />
                 );
               })}
             </g>
-          )}
 
-          {/* SMA line overlay */}
-          {showSMA && smaPath && (
-            <path
-              d={smaPath}
-              fill="none"
-              stroke="#fbbf24"
-              strokeWidth="1.5"
-              strokeDasharray="2 1"
-            />
-          )}
+            {/* Line view */}
+            {chartType === 'line' && linePath && (
+              <>
+                <defs>
+                  <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="var(--accent)" stopOpacity="0.25" />
+                    <stop offset="100%" stopColor="var(--accent)" stopOpacity="0.00" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d={areaPath}
+                  fill="url(#areaGrad)"
+                />
+                <path
+                  d={linePath}
+                  fill="none"
+                  stroke="var(--accent)"
+                  strokeWidth="2.5"
+                />
+              </>
+            )}
 
-          {/* Trendline overlay */}
-          {showTrendline && trendlinePoints && (
-            <line
-              x1={trendlinePoints.x1}
-              y1={trendlinePoints.y1}
-              x2={trendlinePoints.x2}
-              y2={trendlinePoints.y2}
-              stroke="var(--secondary)"
-              strokeWidth="2"
-              strokeDasharray="4 3"
-              style={{ filter: 'drop-shadow(0 0 3px var(--secondary-glow))' }}
-            />
-          )}
+            {/* Candlestick / Heikin-Ashi view */}
+            {(chartType === 'candlestick' || chartType === 'heikin-ashi') && (
+              <g>
+                {finalRenderData.map((d, idx) => {
+                  if (d.isMockSlot) return null;
+                  const x = getX(idx);
+                  const yOpen = getY(d.open);
+                  const yClose = getY(d.close);
+                  const yHigh = getY(d.high);
+                  const yLow = getY(d.low);
 
-          {/* Vertical cursor tracking line on hover */}
+                  const isUpCandle = d.close >= d.open;
+                  const fillColor = isUpCandle ? 'var(--success)' : 'var(--danger)';
+                  const strokeColor = isUpCandle ? 'var(--success)' : 'var(--danger)';
+                  const candleWidth = (chartWidth / finalRenderData.length) * 0.65;
+
+                  return (
+                    <g key={idx}>
+                      {/* Wick line */}
+                      <line
+                        x1={x}
+                        y1={yHigh}
+                        x2={x}
+                        y2={yLow}
+                        stroke={strokeColor}
+                        strokeWidth="1.2"
+                      />
+                      {/* Body rect */}
+                      <rect
+                        x={x - candleWidth / 2}
+                        y={Math.min(yOpen, yClose)}
+                        width={candleWidth}
+                        height={Math.max(1.2, Math.abs(yOpen - yClose))}
+                        fill={fillColor}
+                        stroke={strokeColor}
+                        strokeWidth="0.5"
+                      />
+                    </g>
+                  );
+                })}
+              </g>
+            )}
+
+            {/* SMA line overlay */}
+            {showSMA && smaPath && (
+              <path
+                d={smaPath}
+                fill="none"
+                stroke="#fbbf24"
+                strokeWidth="1.5"
+                strokeDasharray="2 1"
+              />
+            )}
+
+            {/* Trendline overlay */}
+            {showTrendline && trendlinePoints && (
+              <line
+                x1={trendlinePoints.x1}
+                y1={trendlinePoints.y1}
+                x2={trendlinePoints.x2}
+                y2={trendlinePoints.y2}
+                stroke="var(--secondary)"
+                strokeWidth="2"
+                strokeDasharray="4 3"
+                style={{ filter: 'drop-shadow(0 0 3px var(--secondary-glow))' }}
+              />
+            )}
+          </g>
+
+          {/* Vertical and Horizontal cursor tracking lines + axis badges on hover */}
           {hoverIndex !== null && finalRenderData[hoverIndex] && !finalRenderData[hoverIndex].isMockSlot && (
             <g>
+              {/* Vertical line (snapped horizontally) */}
               <line
                 x1={getX(hoverIndex)}
                 y1={paddingTop}
                 x2={getX(hoverIndex)}
                 y2={paddingTop + chartHeight}
-                stroke="rgba(255, 255, 255, 0.18)"
+                stroke="rgba(255, 255, 255, 0.22)"
                 strokeWidth="1"
-                strokeDasharray="2 2"
+                strokeDasharray="3 3"
               />
-              <circle
-                cx={getX(hoverIndex)}
-                cy={getY(finalRenderData[hoverIndex].close)}
-                r="4.5"
-                fill="var(--accent)"
-                stroke="#fff"
-                strokeWidth="1.5"
-              />
+
+              {/* Horizontal line (at exact mouse Y) */}
+              {mousePos.y !== null && mousePos.y >= paddingTop && mousePos.y <= paddingTop + chartHeight && (
+                <line
+                  x1={paddingLeft}
+                  y1={mousePos.y}
+                  x2={width - paddingRight}
+                  y2={mousePos.y}
+                  stroke="rgba(255, 255, 255, 0.22)"
+                  strokeWidth="1"
+                  strokeDasharray="3 3"
+                />
+              )}
+
+              {/* Crosshair circular dot at mouse Y intersection */}
+              {mousePos.y !== null && mousePos.y >= paddingTop && mousePos.y <= paddingTop + chartHeight && (
+                <circle
+                  cx={getX(hoverIndex)}
+                  cy={mousePos.y}
+                  r="4.5"
+                  fill="var(--accent)"
+                  stroke="#fff"
+                  strokeWidth="1.5"
+                />
+              )}
+
+              {/* Y-Axis Price Badge Pill (on the right) */}
+              {mousePos.y !== null && mousePos.y >= paddingTop && mousePos.y <= paddingTop + chartHeight && (
+                <g>
+                  <rect
+                    x={width - paddingRight + 2}
+                    y={mousePos.y - 7}
+                    width={51}
+                    height={14}
+                    rx={3}
+                    fill="var(--accent)"
+                  />
+                  <text
+                    x={width - paddingRight + 27.5}
+                    y={mousePos.y + 3.5}
+                    fill="#fff"
+                    fontSize="8.5"
+                    fontFamily="monospace"
+                    fontWeight="700"
+                    textAnchor="middle"
+                  >
+                    {getPriceFromY(mousePos.y).toFixed(2)}
+                  </text>
+                </g>
+              )}
+
+              {/* X-Axis Time Badge Pill (at the bottom) */}
+              <g>
+                <rect
+                  x={getX(hoverIndex) - 34}
+                  y={paddingTop + chartHeight + 2}
+                  width={68}
+                  height={14}
+                  rx={3}
+                  fill="var(--accent)"
+                />
+                <text
+                  x={getX(hoverIndex)}
+                  y={paddingTop + chartHeight + 12}
+                  fill="#fff"
+                  fontSize="8.5"
+                  fontFamily="monospace"
+                  fontWeight="700"
+                  textAnchor="middle"
+                >
+                  {format24hTime(finalRenderData[hoverIndex].time)}
+                </text>
+              </g>
             </g>
           )}
 
@@ -823,7 +1002,7 @@ const StockChart = ({ ticker }) => {
                 textAnchor="middle"
                 fontWeight="700"
               >
-                {d.time}
+                {format24hTime(d.time)}
               </text>
             );
           })}

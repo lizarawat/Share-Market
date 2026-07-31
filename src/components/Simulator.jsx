@@ -138,8 +138,8 @@ const Simulator = () => {
     }
   };
 
-  // Filter out index tickers from watchlist tabs row
-  const activeWatchlistStocks = stocks.filter(s => s.ticker !== '^NSEI' && s.ticker !== '^NSEBANK');
+  // Display all stocks including indices in watchlist tabs row
+  const activeWatchlistStocks = stocks;
 
   return (
     <div className="fade-in-up" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
