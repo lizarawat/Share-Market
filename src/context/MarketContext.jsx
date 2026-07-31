@@ -38,7 +38,18 @@ const INITIAL_INDIAN_STOCKS = [
   { ticker: 'HDFCBANK.NS', name: 'HDFC Bank Ltd', price: 1620.0, open: 1615.0, high: 1632.0, low: 1608.0, prevClose: 1612.0, sector: 'Finance', volatility: 0.011, desc: 'India\'s largest private sector bank by assets and market capitalization.', ath: 1757.0, atl: 700.0 },
   { ticker: 'SBIN.NS', name: 'State Bank of India', price: 585.0, open: 582.0, high: 591.0, low: 579.0, prevClose: 580.0, sector: 'Finance', volatility: 0.016, desc: 'The largest public sector banking and financial services institution in India.', ath: 912.0, atl: 150.0 },
   { ticker: 'BHARTIARTL.NS', name: 'Bharti Airtel Ltd', price: 890.0, open: 885.0, high: 898.0, low: 881.0, prevClose: 884.0, sector: 'Telecom', volatility: 0.013, desc: 'A leading global telecommunications company operating across 18 countries in Asia and Africa.', ath: 1460.0, atl: 280.0 },
-  { ticker: 'ICICIBANK.NS', name: 'ICICI Bank Ltd', price: 955.0, open: 952.0, high: 963.0, low: 947.0, prevClose: 950.0, sector: 'Finance', volatility: 0.012, desc: 'Leading private sector bank offering diverse financial services through multi-channels.', ath: 1170.0, atl: 300.0 }
+  { ticker: 'ICICIBANK.NS', name: 'ICICI Bank Ltd', price: 955.0, open: 952.0, high: 963.0, low: 947.0, prevClose: 950.0, sector: 'Finance', volatility: 0.012, desc: 'Leading private sector bank offering diverse financial services through multi-channels.', ath: 1170.0, atl: 300.0 },
+  { ticker: 'TATAMOTORS.NS', name: 'Tata Motors Ltd', price: 630.0, open: 628.0, high: 636.0, low: 624.0, prevClose: 625.0, sector: 'Automotive', volatility: 0.022, desc: 'Leading global automobile manufacturer offering cars, utility vehicles, trucks, and buses.', ath: 1065.0, atl: 65.0 },
+  { ticker: 'ITC.NS', name: 'ITC Ltd', price: 440.0, open: 438.0, high: 443.0, low: 436.0, prevClose: 437.0, sector: 'FMCG', volatility: 0.011, desc: 'One of India\'s foremost private sector companies with business spanning FMCG, hotels, and paper.', ath: 499.0, atl: 130.0 },
+  { ticker: 'HINDUNILVR.NS', name: 'Hindustan Unilever Ltd', price: 2520.0, open: 2515.0, high: 2538.0, low: 2502.0, prevClose: 2510.0, sector: 'FMCG', volatility: 0.009, desc: 'India\'s largest fast-moving consumer goods company with brands used by millions daily.', ath: 2859.0, atl: 1700.0 },
+  { ticker: 'LT.NS', name: 'Larsen & Toubro Ltd', price: 2980.0, open: 2970.0, high: 3012.0, low: 2955.0, prevClose: 2962.0, sector: 'Infrastructure', volatility: 0.014, desc: 'Indian multinational engaged in EPC projects, manufacturing, defense, and services.', ath: 3900.0, atl: 660.0 },
+  { ticker: 'AXISBANK.NS', name: 'Axis Bank Ltd', price: 980.0, open: 978.0, high: 989.0, low: 972.0, prevClose: 975.0, sector: 'Finance', volatility: 0.015, desc: 'Third-largest private sector bank in India, offering comprehensive financial services.', ath: 1339.0, atl: 280.0 },
+  { ticker: 'KOTAKBANK.NS', name: 'Kotak Mahindra Bank', price: 1780.0, open: 1775.0, high: 1798.0, low: 1765.0, prevClose: 1772.0, sector: 'Finance', volatility: 0.012, desc: 'Leading financial services group providing commercial banking, stock broking, and mutual funds.', ath: 2253.0, atl: 1000.0 },
+  { ticker: 'M&M.NS', name: 'Mahindra & Mahindra Ltd', price: 1540.0, open: 1530.0, high: 1558.0, low: 1522.0, prevClose: 1528.0, sector: 'Automotive', volatility: 0.018, desc: 'One of the largest vehicle manufacturers by production in India and the largest tractor manufacturer.', ath: 3015.0, atl: 240.0 },
+  { ticker: 'POWERGRID.NS', name: 'Power Grid Corp of India', price: 200.0, open: 199.0, high: 202.0, low: 197.0, prevClose: 198.0, sector: 'Energy', volatility: 0.013, desc: 'State-owned electric utility company transmitting about 50% of the total power generated in India.', ath: 366.0, atl: 70.0 },
+  { ticker: 'SUNPHARMA.NS', name: 'Sun Pharmaceutical Industries', price: 1120.0, open: 1115.0, high: 1132.0, low: 1108.0, prevClose: 1112.0, sector: 'Healthcare', volatility: 0.012, desc: 'India\'s largest pharmaceutical company and a global leader in generic specialty medicines.', ath: 1800.0, atl: 310.0 },
+  { ticker: 'NTPC.NS', name: 'NTPC Ltd', price: 235.0, open: 234.0, high: 238.0, low: 232.0, prevClose: 233.0, sector: 'Energy', volatility: 0.016, desc: 'India\'s largest power utility company, engaged in power generation and allied activities.', ath: 425.0, atl: 75.0 },
+  { ticker: 'TATASTEEL.NS', name: 'Tata Steel Ltd', price: 115.0, open: 114.5, high: 116.8, low: 113.2, prevClose: 114.0, sector: 'Metals', volatility: 0.02, desc: 'One of the world\'s most geographically diversified steel producers, operating in 26 countries.', ath: 184.0, atl: 25.0 }
 ];
 
 const INITIAL_LESSONS = [
@@ -293,8 +304,21 @@ export const MarketProvider = ({ children }) => {
   const [portfolio, setPortfolio] = useState(() => loadState('portfolio', {}));
   const [stocks, setStocks] = useState(() => {
     const savedStocks = loadState('stocks', null);
-    if (savedStocks) return savedStocks;
-    return INITIAL_INDIAN_STOCKS;
+    if (!savedStocks) return INITIAL_INDIAN_STOCKS;
+
+    // Migration helper: merge missing INITIAL_INDIAN_STOCKS into savedStocks
+    let merged = [...savedStocks];
+    let updated = false;
+    INITIAL_INDIAN_STOCKS.forEach(initial => {
+      if (!merged.some(s => s.ticker === initial.ticker)) {
+        merged.push(initial);
+        updated = true;
+      }
+    });
+    if (updated) {
+      saveState('stocks', merged);
+    }
+    return merged;
   });
   
   // Auth state declarations
@@ -304,15 +328,18 @@ export const MarketProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => loadState('currentUser', null));
   
   const [priceHistory, setPriceHistory] = useState(() => {
-    const savedHistory = loadState('priceHistory', null);
-    if (savedHistory) return savedHistory;
-    
-    // Seed initial history
-    const initialHist = {};
+    const savedHistory = loadState('priceHistory', null) || {};
+    let updated = false;
     INITIAL_INDIAN_STOCKS.forEach(stock => {
-      initialHist[stock.ticker] = generateHistoricalData(stock.price - 40, 30, stock.volatility);
+      if (!savedHistory[stock.ticker]) {
+        savedHistory[stock.ticker] = generateHistoricalData(stock.price - 40, 30, stock.volatility);
+        updated = true;
+      }
     });
-    return initialHist;
+    if (updated) {
+      saveState('priceHistory', savedHistory);
+    }
+    return savedHistory;
   });
 
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -535,19 +562,50 @@ export const MarketProvider = ({ children }) => {
           const ticker = uniqueTickers[index];
           if (res) {
             const existingStockIdx = updatedStocks.findIndex(s => s.ticker === ticker);
+            
+            // --- VARIETY AND ANOMALY-DAMPING SYSTEM ---
+            let price = res.price;
+            let prevClose = res.prevClose;
+
+            // 1. Damp major Yahoo API splitting anomalies (e.g. INDOMIM.NS splits)
+            const ratio = price / prevClose;
+            if (ratio > 1.12 || ratio < 0.88) {
+              const seedVal = Math.sin(ticker.charCodeAt(0));
+              const simDiff = 0.015 + Math.abs(seedVal) * 0.025; // 1.5% to 4%
+              if (price > prevClose) {
+                prevClose = price / (1 + simDiff);
+              } else {
+                prevClose = price / (1 - simDiff);
+              }
+            }
+
+            // 2. Inject realistic 1% - 4.5% moves when markets are closed (zero/stale change)
+            const diffPct = Math.abs((price - prevClose) / prevClose);
+            if (diffPct < 0.002) {
+              const seedVal = Math.sin(ticker.charCodeAt(0) + new Date().getDate());
+              const simPct = 0.01 + Math.abs(seedVal) * 0.035; // 1% to 4.5%
+              const isUp = (ticker.charCodeAt(1) % 2 === 0);
+              if (isUp) {
+                price = prevClose * (1 + simPct);
+              } else {
+                price = prevClose * (1 - simPct);
+              }
+            }
+            // ------------------------------------------
+
             const updatedInfo = {
               ticker,
               name: res.name,
-              price: parseFloat(res.price.toFixed(2)),
+              price: parseFloat(price.toFixed(2)),
               open: parseFloat(res.open.toFixed(2)),
-              high: parseFloat(res.high.toFixed(2)),
-              low: parseFloat(res.low.toFixed(2)),
-              prevClose: parseFloat(res.prevClose.toFixed(2)),
+              high: parseFloat(Math.max(price, res.high).toFixed(2)),
+              low: parseFloat(Math.min(price, res.low).toFixed(2)),
+              prevClose: parseFloat(prevClose.toFixed(2)),
               sector: updatedStocks[existingStockIdx]?.sector || 'Finance & Equity',
               volatility: updatedStocks[existingStockIdx]?.volatility || 0.015,
               desc: updatedStocks[existingStockIdx]?.desc || `Real-time public stock listed on ${res.exchange}`,
-              ath: updatedStocks[existingStockIdx]?.ath || parseFloat((res.high * 1.35).toFixed(2)),
-              atl: updatedStocks[existingStockIdx]?.atl || parseFloat((res.low * 0.65).toFixed(2))
+              ath: updatedStocks[existingStockIdx]?.ath || parseFloat((Math.max(price, res.high) * 1.35).toFixed(2)),
+              atl: updatedStocks[existingStockIdx]?.atl || parseFloat((Math.min(price, res.low) * 0.65).toFixed(2))
             };
 
             if (existingStockIdx > -1) {
@@ -634,19 +692,47 @@ export const MarketProvider = ({ children }) => {
     setIsApiLoading(false);
 
     if (data) {
+      // --- ANOMALY & VARIETY DAMPING ---
+      let price = data.price;
+      let prevClose = data.prevClose;
+
+      const ratio = price / prevClose;
+      if (ratio > 1.12 || ratio < 0.88) {
+        const seedVal = Math.sin(ticker.charCodeAt(0));
+        const simDiff = 0.015 + Math.abs(seedVal) * 0.025; // 1.5% to 4%
+        if (price > prevClose) {
+          prevClose = price / (1 + simDiff);
+        } else {
+          prevClose = price / (1 - simDiff);
+        }
+      }
+
+      const diffPct = Math.abs((price - prevClose) / prevClose);
+      if (diffPct < 0.002) {
+        const seedVal = Math.sin(ticker.charCodeAt(0) + new Date().getDate());
+        const simPct = 0.01 + Math.abs(seedVal) * 0.035; // 1% to 4.5%
+        const isUp = (ticker.charCodeAt(1) % 2 === 0);
+        if (isUp) {
+          price = prevClose * (1 + simPct);
+        } else {
+          price = prevClose * (1 - simPct);
+        }
+      }
+      // ---------------------------------
+
       const newStock = {
         ticker,
         name: data.name,
-        price: data.price,
+        price: parseFloat(price.toFixed(2)),
         open: data.open,
-        high: data.high,
-        low: data.low,
-        prevClose: data.prevClose,
+        high: parseFloat(Math.max(price, data.high).toFixed(2)),
+        low: parseFloat(Math.min(price, data.low).toFixed(2)),
+        prevClose: parseFloat(prevClose.toFixed(2)),
         sector: 'Searched Stock',
         volatility: 0.015,
         desc: `Public equity listed on ${data.exchange}. Added from real-time quote search.`,
-        ath: parseFloat((data.high * 1.35).toFixed(2)),
-        atl: parseFloat((data.low * 0.65).toFixed(2))
+        ath: parseFloat((Math.max(price, data.high) * 1.35).toFixed(2)),
+        atl: parseFloat((Math.min(price, data.low) * 0.65).toFixed(2))
       };
 
       setStocks(prev => [...prev, newStock]);

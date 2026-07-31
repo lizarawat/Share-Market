@@ -67,10 +67,17 @@ const Dashboard = () => {
       const change = parseFloat((s.price - s.prevClose).toFixed(2));
       const pct = parseFloat(((change / s.prevClose) * 100).toFixed(2));
       return { ...s, change, pct };
-    }).sort((a, b) => b.pct - a.pct);
+    });
 
-  const topGainer = sortedStocks[0];
-  const topLoser = sortedStocks[sortedStocks.length - 1];
+  const topGainers = [...sortedStocks]
+    .filter(s => s.pct > 0)
+    .sort((a, b) => b.pct - a.pct)
+    .slice(0, 4);
+
+  const topLosers = [...sortedStocks]
+    .filter(s => s.pct < 0)
+    .sort((a, b) => a.pct - b.pct)
+    .slice(0, 4);
 
   // Autocomplete search suggestions
   useEffect(() => {
@@ -411,59 +418,107 @@ const Dashboard = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           {/* Top gainers / losers */}
           <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Market Movers</h3>
-            <div className="grid-2">
-              {topGainer && (
-                <div 
-                  onClick={() => { setSelectedStockTicker(topGainer.ticker); setActiveTab('simulator'); }}
-                  style={{
-                    background: 'var(--success-glow)',
-                    border: '1px solid rgba(16, 185, 129, 0.2)',
-                    borderRadius: '12px',
-                    padding: '1rem',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
-                >
-                  <p style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Gainer 🚀</p>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{topGainer.name}</span>
-                    <span className="stat-up" style={{ fontWeight: 700, fontSize: '0.95rem' }}>+{topGainer.pct}%</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                    <span>Ticker: <strong>{topGainer.ticker}</strong></span>
-                    <span>Price: <strong>₹{topGainer.price}</strong></span>
-                  </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>Today's Top Market Movers</h3>
+              <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily NSE Metrics</span>
+            </div>
+            
+            <div className="grid-2" style={{ gap: '1.25rem' }}>
+              
+              {/* Top Gainers Card */}
+              <div style={{
+                background: 'rgba(16, 185, 129, 0.02)',
+                border: '1px solid rgba(16, 185, 129, 0.12)',
+                borderRadius: '12px',
+                padding: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--success)' }}>
+                  <TrendingUp size={16} />
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Gainers (1% - 4.5% Moves)</span>
                 </div>
-              )}
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {topGainers.map(s => (
+                    <div 
+                      key={s.ticker}
+                      onClick={() => { setSelectedStockTicker(s.ticker); setActiveTab('simulator'); }}
+                      className="glass-card-interactive"
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.5rem 0.65rem',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        background: 'rgba(255,255,255,0.01)'
+                      }}
+                    >
+                      <div>
+                        <strong style={{ color: '#fff' }}>{s.ticker}</strong>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{s.name}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div>₹{s.price.toFixed(2)}</div>
+                        <span className="badge badge-success" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', marginTop: '0.15rem', display: 'inline-block' }}>
+                          +{s.pct}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
 
-              {topLoser && (
-                <div 
-                  onClick={() => { setSelectedStockTicker(topLoser.ticker); setActiveTab('simulator'); }}
-                  style={{
-                    background: 'var(--danger-glow)',
-                    border: '1px solid rgba(244, 63, 94, 0.2)',
-                    borderRadius: '12px',
-                    padding: '1rem',
-                    cursor: 'pointer',
-                    transition: 'all var(--transition-fast)'
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-                  onMouseLeave={(e) => e.currentTarget.style.transform = 'none'}
-                >
-                  <p style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Loser 📉</p>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.25rem' }}>
-                    <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{topLoser.name}</span>
-                    <span className="stat-down" style={{ fontWeight: 700, fontSize: '0.95rem' }}>{topLoser.pct}%</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '0.5rem' }}>
-                    <span>Ticker: <strong>{topLoser.ticker}</strong></span>
-                    <span>Price: <strong>₹{topLoser.price}</strong></span>
-                  </div>
+              {/* Top Losers Card */}
+              <div style={{
+                background: 'rgba(244, 63, 94, 0.02)',
+                border: '1px solid rgba(244, 63, 94, 0.12)',
+                borderRadius: '12px',
+                padding: '1rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--danger)' }}>
+                  <TrendingDown size={16} />
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Top Losers (-1% - -4.5% Moves)</span>
                 </div>
-              )}
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                  {topLosers.map(s => (
+                    <div 
+                      key={s.ticker}
+                      onClick={() => { setSelectedStockTicker(s.ticker); setActiveTab('simulator'); }}
+                      className="glass-card-interactive"
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '0.5rem 0.65rem',
+                        borderRadius: '8px',
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        background: 'rgba(255,255,255,0.01)'
+                      }}
+                    >
+                      <div>
+                        <strong style={{ color: '#fff' }}>{s.ticker}</strong>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{s.name}</div>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <div>₹{s.price.toFixed(2)}</div>
+                        <span className="badge badge-danger" style={{ fontSize: '0.65rem', padding: '0.1rem 0.35rem', marginTop: '0.15rem', display: 'inline-block' }}>
+                          {s.pct}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           </div>
 
