@@ -353,7 +353,7 @@ export const MarketProvider = ({ children }) => {
     return savedHistory;
   });
 
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => loadState('activeTab', 'dashboard'));
   const [xp, setXp] = useState(() => loadState('xp', 0));
   const [badges, setBadges] = useState(() => loadState('badges', []));
   const [lessons, setLessons] = useState(() => loadState('lessons', INITIAL_LESSONS));
@@ -398,6 +398,7 @@ export const MarketProvider = ({ children }) => {
   useEffect(() => { saveState('currentUser', currentUser); }, [currentUser]);
   useEffect(() => { saveState('bankNifty', bankNifty); }, [bankNifty]);
   useEffect(() => { saveState('newsFeed', newsFeed); }, [newsFeed]);
+  useEffect(() => { saveState('activeTab', activeTab); }, [activeTab]);
 
   const triggerAlert = useCallback((message, type = 'info') => {
     setAppAlert({ message, type });
