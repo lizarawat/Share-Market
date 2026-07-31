@@ -37,7 +37,7 @@ const TIMEFRAMES = [
 ];
 
 // Helper to generate realistic mock history walking backwards from currentPrice
-const generateMockHistory = (currentPrice, count = 40) => {
+const generateMockHistory = (currentPrice, count = 40, intervalMinutes = 5) => {
   const result = [];
   let price = currentPrice;
   const now = new Date();
@@ -50,11 +50,14 @@ const generateMockHistory = (currentPrice, count = 40) => {
     const low = Math.min(open, close) - Math.random() * (price * 0.005);
     const volume = Math.floor(Math.random() * 8000 + 2000);
 
-    const timeString = new Date(now.getTime() - i * 5 * 60000).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
+    const dateOffset = new Date(now.getTime() - i * intervalMinutes * 60000);
+    const timeString = intervalMinutes >= 1440
+      ? dateOffset.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })
+      : dateOffset.toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: false
+        }).replace(/\s*[aApP][mM]\s*$/, '');
 
     result.push({
       time: timeString,
@@ -184,7 +187,17 @@ const StockChart = ({ ticker }) => {
             // Generate mock fallback walking backwards from live price quote
             const stockObj = stocks.find(s => s.ticker === ticker);
             const currentPrice = stockObj ? stockObj.price : 500;
-            setChartData(generateMockHistory(currentPrice, 40));
+
+            // Calculate active interval spacing in minutes
+            const interval = selectedTimeframe.interval;
+            let intervalMinutes = 5;
+            if (interval.endsWith('m')) intervalMinutes = parseInt(interval) || 5;
+            else if (interval.endsWith('h')) intervalMinutes = (parseInt(interval) || 1) * 60;
+            else if (interval.endsWith('d')) intervalMinutes = (parseInt(interval) || 1) * 24 * 60;
+            else if (interval.endsWith('wk')) intervalMinutes = 7 * 24 * 60;
+            else if (interval.endsWith('mo')) intervalMinutes = 30 * 24 * 60;
+
+            setChartData(generateMockHistory(currentPrice, 40, intervalMinutes));
           }
         }
         setIsLoading(false);
