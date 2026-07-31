@@ -444,30 +444,62 @@ export const MarketProvider = ({ children }) => {
   // Search stocks suggestion endpoint proxy
   const searchRealTimeStock = async (query) => {
     if (!query || query.trim().length < 2) return [];
+
+    // Always pre-populate matching local stocks first so recommendations are instant
+    const localResults = stocks
+      .filter(s => 
+        s.ticker.toLowerCase().includes(query.toLowerCase()) || 
+        s.name.toLowerCase().includes(query.toLowerCase())
+      )
+      .map(s => ({
+        ticker: s.ticker,
+        name: s.name,
+        exchange: s.ticker.endsWith('.NS') ? 'NSE' : 'INDEX',
+        sector: s.sector || 'Global Equity'
+      }));
+
     try {
-      const response = await fetch(`/api-yahoo/v1/finance/search?q=${encodeURIComponent(query)}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+      const response = await fetch(`/api-yahoo/v1/finance/search?q=${encodeURIComponent(query)}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       const data = await response.json();
-      
-      // Filter out non-equities
       const quotes = data.quotes || [];
-      return quotes
-        .filter(q => q.quoteType === 'EQUITY' || q.typeDisp === 'Equity')
+      
+      const remoteResults = quotes
+        .filter(q => q.quoteType === 'EQUITY' || q.typeDisp === 'Equity' || q.quoteType === 'INDEX' || q.typeDisp === 'Index')
         .map(q => ({
           ticker: q.symbol,
           name: q.longname || q.shortname || q.symbol,
           exchange: q.exchange,
           sector: q.sector || 'Global Equity'
         }));
+
+      // Merge local and remote, avoiding duplicates
+      const merged = [...localResults];
+      remoteResults.forEach(r => {
+        if (!merged.some(m => m.ticker === r.ticker)) {
+          merged.push(r);
+        }
+      });
+      return merged;
     } catch (e) {
-      console.warn("Autocompletion search failed", e);
-      return [];
+      console.warn("Autocompletion search failed, returning local fallback matches", e);
+      return localResults;
     }
   };
 
   // Fetch chart history for active view (wrapped in useCallback to prevent infinite render loops)
   const fetchStockHistoryFromAPI = useCallback(async (ticker, range = '1d', interval = '15m') => {
     try {
-      const response = await fetch(`/api-yahoo/v8/finance/chart/${ticker}?interval=${interval}&range=${range}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1800);
+
+      const response = await fetch(`/api-yahoo/v8/finance/chart/${ticker}?interval=${interval}&range=${range}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+
       const data = await response.json();
       const result = data?.chart?.result?.[0];
       if (!result) return null;
@@ -1077,13 +1109,18 @@ export const MarketProvider = ({ children }) => {
   const fetchCompanyDetails = useCallback(async (ticker) => {
     setIsDetailsLoading(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 1200);
+
       // 1. Fetch news via search API
-      const searchRes = await fetch(`/api-yahoo/v1/finance/search?q=${ticker}`);
+      const searchRes = await fetch(`/api-yahoo/v1/finance/search?q=${ticker}`, { signal: controller.signal });
       const searchData = await searchRes.json();
       const news = searchData.news || [];
 
       // 2. Fetch profile via summary API
-      const summaryRes = await fetch(`/api-yahoo/v10/finance/quoteSummary/${ticker}?modules=assetProfile,defaultKeyStatistics`);
+      const summaryRes = await fetch(`/api-yahoo/v10/finance/quoteSummary/${ticker}?modules=assetProfile,defaultKeyStatistics`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
       const summaryData = await summaryRes.json();
       const result = summaryData.quoteSummary?.result?.[0] || {};
       
